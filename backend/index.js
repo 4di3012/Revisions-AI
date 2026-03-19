@@ -212,6 +212,28 @@ app.post('/projects/:id/revisions', async (req, res) => {
   res.status(201).json(data)
 })
 
+// GET /api/upload-url?filename=xxx&filetype=yyy — presigned PUT URL for CEP plugin uploads
+app.get('/api/upload-url', async (req, res) => {
+  const { filename, filetype } = req.query
+  if (!filename) return res.status(400).json({ error: 'filename is required' })
+
+  const key = `uploads/${Date.now()}-${filename}`
+  const command = new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Key: key,
+    ContentType: filetype || 'video/mp4',
+  })
+
+  try {
+    const presignedUrl = await getSignedUrl(r2, command, { expiresIn: 900 })
+    const publicUrl = `${process.env.R2_PUBLIC_URL}/${key}`
+    res.json({ presignedUrl, publicUrl })
+  } catch (err) {
+    console.error('Upload URL generation failed:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // GET /api/projects — return all projects ordered by created_at desc
 app.get('/api/projects', async (req, res) => {
   const { data, error } = await supabase
