@@ -235,6 +235,7 @@ app.post('/api/projects', async (req, res) => {
       .select()
       .single()
 
+    console.log('POST /api/projects supabase result:', { data, error })
     if (error) return res.status(500).json({ error: error.message })
     res.status(201).json(data)
   } catch (err) {

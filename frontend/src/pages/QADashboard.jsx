@@ -26,7 +26,7 @@ export default function QADashboard() {
         setProjects(pending)
         setLastUpdated(new Date())
       })
-      .catch(() => {})
+      .catch(err => console.error('QADashboard fetch error:', err))
   }, [])
 
   useEffect(() => {

@@ -9,8 +9,8 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     function fetchPending() {
-      axios.get(`${API}/projects?status=pending`)
-        .then(({ data }) => setPendingCount(data.length))
+      axios.get(`${API}/api/projects`)
+        .then(({ data }) => setPendingCount(data.filter(p => p.status === 'pending_qa').length))
         .catch(() => {})
     }
     fetchPending()
@@ -31,10 +31,10 @@ export default function Layout({ children }) {
             Home
           </NavLink>
           <NavLink
-            to="/revisions"
+            to="/qa"
             className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}
           >
-            Revisions
+            QA Needed
             {pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
           </NavLink>
           <NavLink
