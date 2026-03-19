@@ -53,12 +53,24 @@ app.get('/projects', async (req, res) => {
 "anything weird"       → { brand: "Other", cut: "anything weird", type: "Uncategorized" }
 ```
 
-**Algorithm:**
-1. Split title by spaces
-2. `word[0]` → brand (uppercased)
-3. Find first word matching `/^c\d+$/i` → cut (uppercased)
-4. All words after cut index → join, title-case each → type
-5. If no cut word found → `{ brand: "Other", cut: title, type: "Uncategorized" }`
+**Algorithm (if/else branches):**
+
+```
+words = title.split(' ')
+cutIndex = index of first word matching /^c\d+$/i
+
+IF cutIndex found:
+  brand = words[0].toUpperCase()
+  cut   = words[cutIndex].toUpperCase()
+  rest  = words.slice(cutIndex + 1)
+  type  = rest.length > 0
+            ? rest.map(titleCase).join(' ')
+            : "Uncategorized"           ← cut is last word, no type words
+ELSE:
+  brand = "Other"
+  cut   = title                         ← original casing, used as leaf label
+  type  = "Uncategorized"
+```
 
 ---
 
@@ -90,7 +102,7 @@ app.get('/projects', async (req, res) => {
 ## Styling (appended to globals.css)
 
 ```
-Sidebar:         #0d0d14, 220px fixed, border-right 1px solid var(--border)
+Sidebar:         #0d0d14, 220px fixed, border-right 1px solid var(--border), z-index: 20 (above .topbar's z-index: 10)
 Nav link:        DM Sans, 14px, muted by default, white + left blue bar when active
 Brand folder:    var(--surface) card, bold Syne text, count badge
 Type level:      indent 16px, DM Sans medium
