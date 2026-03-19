@@ -39,6 +39,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://revisions-ai.vercel.app',
   'https://revisions-b59gxk8id-adiveluswamy-3830s-projects.vercel.app',
+  'https://revisions-i3x5qapfu-adiveluswamy-3830s-projects.vercel.app',
   process.env.FRONTEND_URL,
 ].filter(Boolean)
 
