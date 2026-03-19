@@ -17,3 +17,13 @@
 \n## Commit: d3f4148 — docs: add dashboard + sidebar implementation plan — 2026-03-19 00:28:31 -0500
 \n## Commit: 3abc28c — feat: add dashboard + sidebar navigation — 2026-03-19 00:36:14 -0500
 \n## Commit: e561c68 — feat: AI classification, QA dashboard, R2 upload, folder hierarchy — 2026-03-19 02:58:06 -0500
+\n## Commit: 350d905 — chore: add engines field to backend package.json for Render deploy — 2026-03-19 14:13:09 -0500
+\n## Commit: b759e36 — chore: open CORS temporarily for upload debugging — 2026-03-19 14:18:41 -0500
+\n## Commit: 5c6c54b — fix: lock down CORS to known Vercel + localhost origins — 2026-03-19 14:19:39 -0500
+\n## Commit: e8ef73b — debug: log request origin in CORS handler — 2026-03-19 14:25:41 -0500
+\n## Commit: 3669bcb — fix: add new Vercel preview URL to CORS allowedOrigins — 2026-03-19 14:30:10 -0500
+\n## Commit: b10b26e — fix: allow all .vercel.app origins via endsWith check — 2026-03-19 14:32:09 -0500
+\n## Commit: 11e4e1d — fix: add vercel.json SPA rewrite for client-side routing — 2026-03-19 14:35:50 -0500
+\n## Commit: 44b21ae — feat: presigned URL upload flow with progress bar — 2026-03-19 14:50:49 -0500
+\n## Commit: 48c50de — feat: scaffold Adobe UXP plugin for Premiere Pro — 2026-03-19 15:11:42 -0500
+\n## Commit: 47cd7aa — fix: allow null origin in CORS for CEP plugin (local file protocol) — 2026-03-19 16:06:39 -0500

@@ -6,7 +6,8 @@
   "host": [
     {
       "app": "PP",
-      "minVersion": "25.0"
+      "minVersion": "26.0",
+      "maxVersion": "26.99"
     }
   ],
   "entrypoints": [
@@ -16,10 +17,5 @@
       "label": "Revision AI",
       "main": "index.html"
     }
-  ],
-  "requiredPermissions": {
-    "network": {
-      "domains": ["https://revision-ai-backend-a4sx.onrender.com", "http://localhost:3001"]
-    }
-  }
+  ]
 }
