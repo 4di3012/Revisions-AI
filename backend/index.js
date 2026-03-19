@@ -35,7 +35,22 @@ Respond with ONLY one word: small or big.`
 
 const app = express()
 
-app.use(cors())
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://revisions-ai.vercel.app',
+  'https://revisions-b59gxk8id-adiveluswamy-3830s-projects.vercel.app',
+  process.env.FRONTEND_URL,
+].filter(Boolean)
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  }
+}))
 
 app.use(express.json())
 
