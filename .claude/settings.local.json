@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p frontend)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(mkdir -p /c/Users/adive/revision-ai/e2e)",
+      "Bash(npm init:*)",
+      "Bash(chmod:*)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git remote:*)",
+      "Bash(pkill -f \"node.*index.js\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill:*)",
+      "Bash(npm run:*)",
+      "Bash(node backend/index.js)",
+      "Bash(findstr :3001)",
+      "Bash(cmd /c \"taskkill /PID 23472 /F\" 2>&1)",
+      "Bash(cmd /c \"taskkill /PID 23472 /F 2>&1\")",
+      "Bash(powershell -Command \"Stop-Process -Id 23472 -Force -ErrorAction SilentlyContinue; Start-Sleep 1; \\(Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue\\) | Select-Object -First 1 OwningProcess\")",
+      "Bash(curl -v -X POST http://localhost:3001/projects/75ae6c3d-5696-433c-808e-b724aa28185f/upload -F \"video=@/tmp/test.mp4;type=video/mp4\")",
+      "Bash(powershell -Command \"\n\\\\$bytes = New-Object byte[] 1024\n\\(New-Object Random\\).NextBytes\\(\\\\$bytes\\)\n[System.IO.File]::WriteAllBytes\\('C:\\\\\\\\tmp\\\\\\\\test.mp4', \\\\$bytes\\)\nWrite-Host 'File created'\n\")",
+      "Bash(node -e \":*)",
+      "Bash(node -e \"process.stdin.resume\\(\\);let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>console.log\\(JSON.stringify\\(JSON.parse\\(d\\),null,2\\)\\)\\)\")",
+      "Bash(node:*)"
+    ]
+  }
+}

@@ -129,6 +129,9 @@ export default function ReviewPage() {
               <div key={r.id} className="revision-card">
                 <span className="revision-timestamp">{formatTime(r.timestamp_seconds)}</span>
                 <span className="revision-note">{r.note}</span>
+                <span className={`revision-badge revision-badge-${r.category ?? 'pending'}`}>
+                  {r.category === 'small' ? 'Auto' : r.category === 'big' ? 'Needs Editor' : 'Unclassified'}
+                </span>
               </div>
             ))
           )}

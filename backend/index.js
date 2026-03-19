@@ -3,9 +3,35 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') })
 const express = require('express')
 const cors = require('cors')
 const multer = require('multer')
+const { PutObjectCommand } = require('@aws-sdk/client-s3')
 const supabase = require('./lib/supabase')
+const r2 = require('./lib/r2')
+const claude = require('./lib/claude')
 
 const upload = multer({ storage: multer.memoryStorage() })
+
+function classificationPrompt(note) {
+  return `You are a video revision classifier for a media buying agency. A strategist has left the following revision note on a video ad: '${note}'.
+
+Classify this revision as either 'small' or 'big'.
+
+Small = anything that can be precisely described and executed without creative judgment:
+- Color changes (change X to color Y)
+- Text/caption edits (fix spelling, change word, add punctuation)
+- Frame cuts and trims (remove X seconds at timestamp Y)
+- Number or value changes
+- Font or size changes
+- Remove or add a specific element
+
+Big = anything requiring creative judgment, new assets, or re-recording:
+- Replace a clip with different footage
+- Re-record voiceover
+- Change entire scenes
+- Structural changes to the video flow
+- Anything requiring new files not already in the project
+
+Respond with ONLY one word: small or big.`
+}
 
 const app = express()
 
@@ -41,23 +67,32 @@ app.post('/projects', async (req, res) => {
   res.status(201).json(data)
 })
 
-// POST /projects/:id/upload — upload MP4 to Supabase Storage, update video_url
+// POST /projects/:id/upload — upload MP4 to R2, update video_url
 app.post('/projects/:id/upload', upload.single('video'), async (req, res) => {
   const { id } = req.params
+  console.log('R2 endpoint:', `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`)
   if (!req.file) return res.status(400).json({ error: 'video file is required' })
 
-  const filePath = `${id}/${Date.now()}.mp4`
+  const key = `${id}/${Date.now()}.mp4`
 
-  const { error: uploadError } = await supabase.storage
-    .from('videos')
-    .upload(filePath, req.file.buffer, {
-      contentType: 'video/mp4',
-      upsert: false,
-    })
+  try {
+    await r2.send(new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME,
+      Key: key,
+      Body: req.file.buffer,
+      ContentType: 'video/mp4',
+    }))
+  } catch (uploadError) {
+    console.error('R2 upload failed:')
+    console.error('  code:     ', uploadError.code)
+    console.error('  message:  ', uploadError.message)
+    console.error('  $metadata:', uploadError.$metadata)
+    console.error('  cause:    ', uploadError.cause)
+    await supabase.from('projects').delete().eq('id', id)
+    return res.status(500).json({ error: uploadError.message })
+  }
 
-  if (uploadError) return res.status(500).json({ error: uploadError.message })
-
-  const videoUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/videos/${filePath}`
+  const videoUrl = `${process.env.R2_PUBLIC_URL}/${key}`
 
   const { data, error } = await supabase
     .from('projects')
@@ -70,12 +105,15 @@ app.post('/projects/:id/upload', upload.single('video'), async (req, res) => {
   res.json(data)
 })
 
-// GET /projects — return all projects ordered by created_at descending
+// GET /projects — return all projects; optional ?status= filter
 app.get('/projects', async (req, res) => {
-  const { data, error } = await supabase
+  const { status } = req.query
+  let query = supabase
     .from('projects')
     .select('*')
     .order('created_at', { ascending: false })
+  if (status) query = query.eq('status', status)
+  const { data, error } = await query
   if (error) return res.status(500).json({ error: error.message })
   res.json(data)
 })
@@ -103,7 +141,7 @@ app.get('/projects/:id', async (req, res) => {
   res.json({ ...project, revisions })
 })
 
-// POST /projects/:id/revisions — add a timestamped revision note
+// POST /projects/:id/revisions — classify with Claude, then save
 app.post('/projects/:id/revisions', async (req, res) => {
   const { id } = req.params
   const { timestamp_seconds, note } = req.body
@@ -112,9 +150,25 @@ app.post('/projects/:id/revisions', async (req, res) => {
     return res.status(400).json({ error: 'timestamp_seconds and note are required' })
   }
 
+  let category = null
+  try {
+    const msg = await claude.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 10,
+      messages: [{
+        role: 'user',
+        content: classificationPrompt(note),
+      }],
+    })
+    const result = msg.content[0].text.trim().toLowerCase()
+    if (result === 'small' || result === 'big') category = result
+  } catch (e) {
+    console.error('Claude classification failed:', e.message)
+  }
+
   const { data, error } = await supabase
     .from('revisions')
-    .insert({ project_id: id, timestamp_seconds, note })
+    .insert({ project_id: id, timestamp_seconds, note, category })
     .select()
     .single()
 

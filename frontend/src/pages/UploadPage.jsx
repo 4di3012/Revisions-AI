@@ -12,11 +12,17 @@ export default function UploadPage() {
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
+  function applyFile(f) {
+    if (!f) return
+    setFile(f)
+    if (!title) setTitle(f.name.replace(/\.[^.]+$/, ''))
+  }
+
   function handleDrop(e) {
     e.preventDefault()
     setDragging(false)
     const dropped = e.dataTransfer.files[0]
-    if (dropped?.type === 'video/mp4') setFile(dropped)
+    if (dropped?.type === 'video/mp4') applyFile(dropped)
   }
 
   async function handleSubmit(e) {
@@ -72,7 +78,7 @@ export default function UploadPage() {
                 type="file"
                 accept="video/mp4"
                 disabled={loading}
-                onChange={e => setFile(e.target.files[0])}
+                onChange={e => applyFile(e.target.files[0])}
               />
               <span className="drop-zone-icon">🎬</span>
               <span className="drop-zone-label">
