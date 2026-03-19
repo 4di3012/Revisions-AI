@@ -16,3 +16,4 @@
 \n## Commit: 70084e1 — docs: add dashboard + sidebar design spec — 2026-03-19 00:23:18 -0500
 \n## Commit: d3f4148 — docs: add dashboard + sidebar implementation plan — 2026-03-19 00:28:31 -0500
 \n## Commit: 3abc28c — feat: add dashboard + sidebar navigation — 2026-03-19 00:36:14 -0500
+\n## Commit: e561c68 — feat: AI classification, QA dashboard, R2 upload, folder hierarchy — 2026-03-19 02:58:06 -0500
