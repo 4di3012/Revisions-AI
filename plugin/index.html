@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Revision AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #13131a;
+      --surface2:  #1a1a24;
+      --border:    #2a2a38;
+      --accent:    #3b82f6;
+      --accent-hover: #2563eb;
+      --text:      #e8e8f0;
+      --text-muted:#6b6b8a;
+      --radius:    10px;
+      --radius-sm: 7px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .panel {
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-height: 100%;
+    }
+
+    .wordmark {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .wordmark span {
+      color: var(--accent);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 11px 16px;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(59, 130, 246, 0.28);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 22px rgba(59, 130, 246, 0.42);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .status {
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+    }
+
+    .status.success {
+      color: #4ade80;
+      border-color: rgba(34, 197, 94, 0.25);
+      background: rgba(34, 197, 94, 0.07);
+    }
+
+    .status.error {
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.25);
+      background: rgba(239, 68, 68, 0.07);
+    }
+
+    .revisions-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .revisions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .revisions-empty {
+      font-size: 13px;
+      color: var(--text-muted);
+      padding: 16px 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="wordmark">Revision<span>AI</span></div>
+
+    <button class="btn-primary" id="sendBtn">Send to QA</button>
+
+    <div class="status" id="status">Ready.</div>
+
+    <div>
+      <div class="revisions-label">Revisions</div>
+      <div class="revisions-list" id="revisionsList">
+        <div class="revisions-empty">No revisions yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="index.js"></script>
+</body>
+</html>

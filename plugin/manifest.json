@@ -1,0 +1,25 @@
+{
+  "id": "com.revisionai.plugin",
+  "name": "Revision AI",
+  "version": "1.0.0",
+  "manifestVersion": 6,
+  "host": [
+    {
+      "app": "PP",
+      "minVersion": "25.0"
+    }
+  ],
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "revision-ai-panel",
+      "label": "Revision AI",
+      "main": "index.html"
+    }
+  ],
+  "requiredPermissions": {
+    "network": {
+      "domains": ["https://revision-ai-backend-a4sx.onrender.com", "http://localhost:3001"]
+    }
+  }
+}
