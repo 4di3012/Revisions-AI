@@ -212,6 +212,27 @@ app.post('/projects/:id/revisions', async (req, res) => {
   res.status(201).json(data)
 })
 
+// POST /api/projects — CEP plugin entry point
+app.post('/api/projects', async (req, res) => {
+  console.log('POST /api/projects hit', req.body)
+  const { project_name, status } = req.body
+  if (!project_name) return res.status(400).json({ error: 'project_name is required' })
+
+  try {
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({ title: project_name, status: status || 'pending_qa' })
+      .select()
+      .single()
+
+    if (error) return res.status(500).json({ error: error.message })
+    res.status(201).json(data)
+  } catch (err) {
+    console.error('POST /api/projects error:', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'revision-ai-backend' })
 })
