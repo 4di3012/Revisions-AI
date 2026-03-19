@@ -212,6 +212,16 @@ app.post('/projects/:id/revisions', async (req, res) => {
   res.status(201).json(data)
 })
 
+// GET /api/projects — return all projects ordered by created_at desc
+app.get('/api/projects', async (req, res) => {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) return res.status(500).json({ error: error.message })
+  res.json(data)
+})
+
 // POST /api/projects — CEP plugin entry point
 app.post('/api/projects', async (req, res) => {
   console.log('POST /api/projects hit', req.body)

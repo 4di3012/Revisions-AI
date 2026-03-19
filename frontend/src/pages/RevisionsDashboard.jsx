@@ -32,7 +32,7 @@ export default function RevisionsDashboard() {
 
   return (
     <div className="page dashboard-body">
-      <h1 className="dashboard-heading">Revisions Queue</h1>
+      <h1 className="dashboard-heading">QA Needed</h1>
 
       {projects.length === 0 ? (
         <p className="dashboard-empty">
