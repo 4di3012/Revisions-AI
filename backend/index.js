@@ -50,6 +50,7 @@ app.use(cors({
     if (
       !origin ||
       origin === 'null' ||
+      origin.startsWith('file://') ||
       origin.endsWith('.vercel.app') ||
       origin.startsWith('http://localhost') ||
       origin === process.env.FRONTEND_URL
