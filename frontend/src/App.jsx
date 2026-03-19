@@ -1,9 +1,14 @@
-function App() {
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import UploadPage from './pages/UploadPage'
+import ReviewPage from './pages/ReviewPage'
+
+export default function App() {
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      <h1>Revision AI — Coming Soon</h1>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<UploadPage />} />
+        <Route path="/review/:id" element={<ReviewPage />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
-
-export default App
