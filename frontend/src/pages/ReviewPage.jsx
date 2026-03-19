@@ -60,56 +60,80 @@ export default function ReviewPage() {
     }
   }
 
-  if (!project) return <p style={{ padding: 32 }}>Loading…</p>
+  if (!project) {
+    return <div className="loading-screen">Loading project…</div>
+  }
 
   return (
-    <div style={{ maxWidth: 800, margin: '32px auto', padding: '0 16px' }}>
-      <h1>{project.title}</h1>
+    <div className="page">
+      <div className="topbar">
+        <span className="topbar-title">{project.title}</span>
+        <span className="topbar-logo">Revision AI</span>
+      </div>
 
-      <video
-        ref={videoRef}
-        src={project.video_url}
-        controls
-        style={{ width: '100%', background: '#000', marginBottom: 16 }}
-      />
+      <div className="review-body">
+        <div className="video-wrap">
+          <video ref={videoRef} src={project.video_url} controls />
+        </div>
 
-      <button onClick={handleAddNote} style={{ padding: '8px 20px', marginBottom: 24 }}>
-        Add Revision Note
-      </button>
+        <button
+          className="btn btn-primary"
+          onClick={handleAddNote}
+          style={{ marginBottom: 24 }}
+        >
+          + Add Revision Note
+        </button>
 
-      {showForm && (
-        <form onSubmit={handleSubmitNote} style={{ marginBottom: 24 }}>
-          <p style={{ margin: '0 0 8px' }}>
-            Note at <strong>{formatTime(capturedTime)}</strong>
-          </p>
-          <textarea
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            rows={3}
-            style={{ width: '100%', padding: 8 }}
-            placeholder="Describe the revision…"
-            disabled={submitting}
-          />
-          <br />
-          {error && <p style={{ color: 'red' }}>{error}</p>}
-          <button type="submit" disabled={submitting} style={{ marginTop: 8, padding: '6px 18px' }}>
-            {submitting ? 'Saving…' : 'Save Note'}
-          </button>
-        </form>
-      )}
+        {showForm && (
+          <div className="note-panel">
+            <div className="timestamp-badge">
+              ⏱ {formatTime(capturedTime)}
+            </div>
+            <form onSubmit={handleSubmitNote}>
+              <textarea
+                rows={3}
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder="Describe the revision…"
+                disabled={submitting}
+                autoFocus
+              />
+              {error && <p className="error-msg">{error}</p>}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="btn btn-primary"
+              >
+                {submitting ? (
+                  <>
+                    <span className="spinner" />
+                    Saving…
+                  </>
+                ) : (
+                  'Save Note'
+                )}
+              </button>
+            </form>
+          </div>
+        )}
 
-      <h2>Revision Notes</h2>
-      {revisions.length === 0 ? (
-        <p>No revision notes yet.</p>
-      ) : (
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {revisions.map(r => (
-            <li key={r.id} style={{ borderBottom: '1px solid #eee', padding: '10px 0' }}>
-              <strong>{formatTime(r.timestamp_seconds)}</strong> — {r.note}
-            </li>
-          ))}
-        </ul>
-      )}
+        <div className="revisions-section">
+          <h2 className="revisions-heading">Revision Notes</h2>
+
+          {revisions.length === 0 ? (
+            <p className="empty-state">
+              No revisions yet. Watch the video and add your first note.
+            </p>
+          ) : (
+            revisions.map(r => (
+              <div key={r.id} className="revision-card">
+                <span className="revision-timestamp">{formatTime(r.timestamp_seconds)}</span>
+                <span className="revision-note">{r.note}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   )
 }
