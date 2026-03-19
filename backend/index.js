@@ -225,13 +225,16 @@ app.get('/api/projects', async (req, res) => {
 // POST /api/projects — CEP plugin entry point
 app.post('/api/projects', async (req, res) => {
   console.log('POST /api/projects hit', req.body)
-  const { project_name, status } = req.body
+  const { project_name, status, video_url } = req.body
   if (!project_name) return res.status(400).json({ error: 'project_name is required' })
+
+  const insertData = { title: project_name, status: status || 'pending_qa' }
+  if (video_url) insertData.video_url = video_url
 
   try {
     const { data, error } = await supabase
       .from('projects')
-      .insert({ title: project_name, status: status || 'pending_qa' })
+      .insert(insertData)
       .select()
       .single()
 

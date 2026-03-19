@@ -73,7 +73,13 @@ export default function ReviewPage() {
 
       <div className="review-body">
         <div className="video-wrap">
-          <video ref={videoRef} src={project.video_url} controls />
+          {project.video_url ? (
+            <video ref={videoRef} src={project.video_url} controls />
+          ) : (
+            <div style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+              No video uploaded yet.
+            </div>
+          )}
         </div>
 
         <button
