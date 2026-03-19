@@ -4,6 +4,7 @@ const express = require('express')
 const cors = require('cors')
 const multer = require('multer')
 const { PutObjectCommand } = require('@aws-sdk/client-s3')
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner')
 const supabase = require('./lib/supabase')
 const r2 = require('./lib/r2')
 const claude = require('./lib/claude')
@@ -61,14 +62,38 @@ app.use(cors({
 
 app.use(express.json())
 
+// GET /projects/presigned-url?filename=xxx — generate presigned PUT URL for R2
+app.get('/projects/presigned-url', async (req, res) => {
+  const { filename } = req.query
+  if (!filename) return res.status(400).json({ error: 'filename is required' })
+
+  const command = new PutObjectCommand({
+    Bucket: process.env.R2_BUCKET_NAME,
+    Key: filename,
+    ContentType: 'video/mp4',
+  })
+
+  try {
+    const presignedUrl = await getSignedUrl(r2, command, { expiresIn: 900 })
+    const publicUrl = `${process.env.R2_PUBLIC_URL}/${filename}`
+    res.json({ presignedUrl, publicUrl })
+  } catch (err) {
+    console.error('Presign failed:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /projects — create a new project
 app.post('/projects', async (req, res) => {
-  const { title } = req.body
+  const { title, videoUrl } = req.body
   if (!title) return res.status(400).json({ error: 'title is required' })
+
+  const insertData = { title }
+  if (videoUrl) insertData.video_url = videoUrl
 
   const { data, error } = await supabase
     .from('projects')
-    .insert({ title })
+    .insert(insertData)
     .select()
     .single()
 

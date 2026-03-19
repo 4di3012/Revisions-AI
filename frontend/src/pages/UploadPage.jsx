@@ -4,11 +4,29 @@ import axios from 'axios'
 
 const API = import.meta.env.VITE_API_URL
 
+function uploadWithProgress(url, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', 'video/mp4')
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else reject(new Error(`Upload failed with status ${xhr.status}`))
+    }
+    xhr.onerror = () => reject(new Error('Network error during upload'))
+    xhr.send(file)
+  })
+}
+
 export default function UploadPage() {
   const [title, setTitle] = useState('')
   const [file, setFile] = useState(null)
   const [dragging, setDragging] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
@@ -29,21 +47,22 @@ export default function UploadPage() {
     e.preventDefault()
     if (!title || !file) return setError('Title and video file are required.')
     setError('')
-    setLoading(true)
+    setUploading(true)
+    setProgress(0)
 
     try {
-      const { data: project } = await axios.post(`${API}/projects`, { title })
+      const { data: { presignedUrl, publicUrl } } = await axios.get(
+        `${API}/projects/presigned-url?filename=${encodeURIComponent(file.name)}`
+      )
 
-      const formData = new FormData()
-      formData.append('video', file)
-      await axios.post(`${API}/projects/${project.id}/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      await uploadWithProgress(presignedUrl, file, setProgress)
 
-      navigate(`/review/${project.id}`)
+      await axios.post(`${API}/projects`, { title, videoUrl: publicUrl })
+
+      navigate('/qa')
     } catch (err) {
-      setError(err.response?.data?.error || 'Upload failed. Please try again.')
-      setLoading(false)
+      setError(err.response?.data?.error || err.message || 'Upload failed. Please try again.')
+      setUploading(false)
     }
   }
 
@@ -61,7 +80,7 @@ export default function UploadPage() {
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
-              disabled={loading}
+              disabled={uploading}
               placeholder="e.g. Q2 Campaign — Cut 3"
             />
           </div>
@@ -77,7 +96,7 @@ export default function UploadPage() {
               <input
                 type="file"
                 accept="video/mp4"
-                disabled={loading}
+                disabled={uploading}
                 onChange={e => applyFile(e.target.files[0])}
               />
               <span className="drop-zone-icon">🎬</span>
@@ -88,23 +107,54 @@ export default function UploadPage() {
             </div>
           </div>
 
+          {uploading && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: 13,
+                color: 'var(--text-muted)',
+                marginBottom: 6,
+              }}>
+                <span>Uploading…</span>
+                <span>{progress}%</span>
+              </div>
+              <div style={{
+                height: 6,
+                borderRadius: 3,
+                background: 'var(--surface2)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${progress}%`,
+                  background: 'linear-gradient(90deg, #3b82f6, #2563eb)',
+                  borderRadius: 3,
+                  transition: 'width 0.2s ease',
+                }} />
+              </div>
+            </div>
+          )}
+
           {error && <p className="error-msg">{error}</p>}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn btn-primary btn-full"
-            style={{ marginTop: 8 }}
-          >
-            {loading ? (
-              <>
-                <span className="spinner" />
-                Uploading…
-              </>
-            ) : (
-              'Create Project'
-            )}
-          </button>
+          {file && (
+            <button
+              type="submit"
+              disabled={uploading}
+              className="btn btn-primary btn-full"
+              style={{ marginTop: 8 }}
+            >
+              {uploading ? (
+                <>
+                  <span className="spinner" />
+                  Uploading…
+                </>
+              ) : (
+                'Submit to QA'
+              )}
+            </button>
+          )}
         </form>
       </div>
     </div>
