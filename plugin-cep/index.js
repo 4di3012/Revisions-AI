@@ -573,14 +573,48 @@ function pollPendingEdits() {
       if (edit.action_json && edit.action_json.action === 'caption_text_change') {
         var aj = edit.action_json
         var editId = edit.id
-        var script = 'var foundWords = []; var result = "not found"; try { var seq = app.project.activeSequence; var findText = ' + JSON.stringify(aj.find) + '; var replaceText = ' + JSON.stringify(aj.replace) + '; for (var t = 0; t < seq.videoTracks.numTracks; t++) { var track = seq.videoTracks[t]; for (var c = 0; c < track.clips.numItems; c++) { var clip = track.clips[c]; for (var i = 0; i < clip.components.numItems; i++) { var comp = clip.components[i]; for (var p = 0; p < comp.properties.numItems; p++) { var prop = comp.properties[p]; if (prop.displayName === "Source Text") { try { var currentText = prop.getValue(); if (typeof currentText === "string" && currentText.trim() !== "") { foundWords.push(currentText); if (currentText.toLowerCase() === findText.toLowerCase()) { prop.setValue(replaceText); result = "success"; } } } catch(e) {} } } } } } } catch(err) { result = "error: " + err.toString(); } if (result !== "success") { result = "not found — words on timeline: " + foundWords.join("|"); } result;'
-        csInterface.evalScript(script, function (result) {
-          alert('ExtendScript result: ' + result)
-          if (result === 'success') {
-            markRevisionApplied(editId)
-          } else {
-            markRevisionFailed(editId)
-          }
+        csInterface.evalScript('$.findText = ' + JSON.stringify(aj.find) + '; $.replaceText = ' + JSON.stringify(aj.replace) + ';', function () {
+          var searchScript = [
+            'var foundWords = [];',
+            'var result = "not found";',
+            'try {',
+            '  var seq = app.project.activeSequence;',
+            '  for (var t = 0; t < seq.videoTracks.numTracks; t++) {',
+            '    var track = seq.videoTracks[t];',
+            '    for (var c = 0; c < track.clips.numItems; c++) {',
+            '      var clip = track.clips[c];',
+            '      for (var i = 0; i < clip.components.numItems; i++) {',
+            '        var comp = clip.components[i];',
+            '        for (var p = 0; p < comp.properties.numItems; p++) {',
+            '          var prop = comp.properties[p];',
+            '          if (prop.displayName === "Source Text") {',
+            '            try {',
+            '              var val = prop.getValue();',
+            '              if (typeof val === "string" && val.trim() !== "") {',
+            '                foundWords.push(val);',
+            '                if (val.toLowerCase() === $.findText.toLowerCase()) {',
+            '                  prop.setValue($.replaceText);',
+            '                  result = "success";',
+            '                }',
+            '              }',
+            '            } catch(e) {}',
+            '          }',
+            '        }',
+            '      }',
+            '    }',
+            '  }',
+            '} catch(err) { result = "error: " + err.toString(); }',
+            'if (result !== "success") { result = "not found — words: " + foundWords.join("|"); }',
+            'result;'
+          ].join('\n')
+          csInterface.evalScript(searchScript, function (result) {
+            alert('ExtendScript result: ' + result)
+            if (result === 'success') {
+              markRevisionApplied(editId)
+            } else {
+              markRevisionFailed(editId)
+            }
+          })
         })
         return
       }
