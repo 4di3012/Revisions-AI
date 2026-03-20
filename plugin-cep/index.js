@@ -289,7 +289,6 @@ function buildExecuteScript(actionJson) {
     '    var result = "SKIP: no handler";',
     '    var a = action.action;',
     '',
-    '
     '    // ── lumetri_color ────────────────────────────────────────────────',
     '    if (a === "lumetri_color") {',
     '      var lumetriDone = false;',
