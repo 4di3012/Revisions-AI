@@ -189,12 +189,12 @@ app.get('/projects', async (req, res) => {
   res.json(data)
 })
 
-// GET /projects/pending-edits — return all auto revisions with actionable statuses
+// GET /projects/pending-edits — return all auto revisions with status='queued'
 app.get('/projects/pending-edits', async (req, res) => {
   const { data, error } = await supabase
     .from('revisions')
     .select('*')
-    .in('status', ['queued', 'pending', 'applying'])
+    .eq('status', 'queued')
     .eq('category', 'auto')
   console.log('pending-edits result:', JSON.stringify(data), error)
   if (error) return res.status(500).json({ error: error.message })
@@ -292,7 +292,7 @@ app.post('/projects/:id/revisions', async (req, res) => {
   res.status(201).json(data)
 })
 
-// POST /projects/:id/apply-edits — queue all pending auto revisions for plugin execution
+// POST /projects/:id/apply-edits — reset ALL auto revisions to queued for plugin execution
 app.post('/projects/:id/apply-edits', async (req, res) => {
   const { id } = req.params
 
@@ -301,16 +301,16 @@ app.post('/projects/:id/apply-edits', async (req, res) => {
     .select('id, timestamp_seconds, note, action_type, action_json, project_id')
     .eq('project_id', id)
     .eq('category', 'auto')
-    .eq('status', 'pending')
     .order('timestamp_seconds', { ascending: true })
 
   if (fetchError) return res.status(500).json({ error: fetchError.message })
   if (edits.length === 0) return res.json({ edits: [] })
 
-  const { error: updateError } = await supabase
+  const { data, error: updateError } = await supabase
     .from('revisions')
     .update({ status: 'queued' })
-    .in('id', edits.map(e => e.id))
+    .eq('project_id', id)
+    .eq('category', 'auto')
 
   if (updateError) return res.status(500).json({ error: updateError.message })
   res.json({ edits })
