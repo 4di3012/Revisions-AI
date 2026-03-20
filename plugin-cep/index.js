@@ -289,33 +289,7 @@ function buildExecuteScript(actionJson) {
     '    var result = "SKIP: no handler";',
     '    var a = action.action;',
     '',
-    '    // ── caption_text_change ──────────────────────────────────────────',
-    '    if (a === "caption_text_change") {',
-    '      var textFound = false;',
-    '      for (var mi=0; mi<matched.length && !textFound; mi++) {',
-    '        var cl = matched[mi].clip;',
-    '        var comps = cl.components;',
-    '        for (var cii=0; cii<comps.numItems && !textFound; cii++) {',
-    '          var comp = comps[cii];',
-    '          for (var pi=0; pi<comp.properties.numItems && !textFound; pi++) {',
-    '            var prop = comp.properties[pi];',
-    '            if (prop.displayName === "Source Text") {',
-    '              try {',
-    '                var textDoc = prop.getValue();',
-    '                var currentText = textDoc.toString();',
-    '                if (currentText.toLowerCase().indexOf(action.find.toLowerCase()) !== -1) {',
-    '                  textDoc.text = currentText.replace(new RegExp(action.find, "gi"), action.replace);',
-    '                  prop.setValue(textDoc);',
-    '                  textFound = true;',
-    '                }',
-    '              } catch(ste) { /* skip this property */ }',
-    '            }',
-    '          }',
-    '        }',
-    '      }',
-    '      result = textFound ? "OK" : "ERROR: text [" + action.find + "] not found";',
-    '    }',
-    '',
+    '
     '    // ── lumetri_color ────────────────────────────────────────────────',
     '    if (a === "lumetri_color") {',
     '      var lumetriDone = false;',
@@ -571,11 +545,45 @@ function pollPendingEdits() {
       var edit = edits[idx]
       setStatus('Applying edit ' + (idx + 1) + ' of ' + edits.length + '…')
 
+      function markRevisionApplied(id) {
+        appliedIds.push(id)
+        var xhr = new XMLHttpRequest()
+        xhr.open('PATCH', API + '/revisions/' + id + '/status')
+        xhr.setRequestHeader('Content-Type', 'application/json')
+        xhr.onload = function () { idx++; executeNext() }
+        xhr.onerror = function () { idx++; executeNext() }
+        xhr.send(JSON.stringify({ status: 'applied' }))
+      }
+
+      function markRevisionFailed(id) {
+        var xhr = new XMLHttpRequest()
+        xhr.open('PATCH', API + '/revisions/' + id + '/status')
+        xhr.setRequestHeader('Content-Type', 'application/json')
+        xhr.onload = function () { idx++; executeNext() }
+        xhr.onerror = function () { idx++; executeNext() }
+        xhr.send(JSON.stringify({ status: 'failed' }))
+      }
+
+      if (edit.action_json && edit.action_json.action === 'caption_text_change') {
+        var aj = edit.action_json
+        // timecode_seconds may not be in action_json — fall back to revision timestamp
+        var tcSec = (aj.timecode_seconds !== undefined) ? aj.timecode_seconds : edit.timestamp_seconds
+        var script = 'var result = "none"; try { var seq = app.project.activeSequence; var targetSec = ' + tcSec + '; var findText = ' + JSON.stringify(aj.find) + '; var replaceText = ' + JSON.stringify(aj.replace) + '; for (var t = 0; t < seq.videoTracks.numTracks; t++) { var track = seq.videoTracks[t]; for (var c = 0; c < track.clips.numItems; c++) { var clip = track.clips[c]; if (clip.start.seconds <= targetSec + 5 && clip.end.seconds >= targetSec - 5) { for (var i = 0; i < clip.components.numItems; i++) { var comp = clip.components[i]; for (var p = 0; p < comp.properties.numItems; p++) { var prop = comp.properties[p]; if (prop.displayName === "Source Text") { try { var td = prop.getValue(); var txt = td.toString(); if (txt.toLowerCase().indexOf(findText.toLowerCase()) !== -1) { td.text = txt.replace(new RegExp(findText, "gi"), replaceText); prop.setValue(td); result = "success"; } } catch(e) {} } } } } } } } catch(err) { result = "error: " + err.toString(); } result;'
+        csInterface.evalScript(script, function (result) {
+          if (result === 'success') {
+            markRevisionApplied(edit.id)
+          } else {
+            markRevisionFailed(edit.id)
+          }
+        })
+        return
+      }
+
+      // All other action types
       var script = buildExecuteScript(edit.action_json)
       csInterface.evalScript(script, function (result) {
         var newStatus = (result && result.indexOf('ERROR') === -1) ? 'applied' : 'failed'
         if (newStatus === 'applied') appliedIds.push(edit.id)
-
         var patchXhr = new XMLHttpRequest()
         patchXhr.open('PATCH', API + '/revisions/' + edit.id + '/status')
         patchXhr.setRequestHeader('Content-Type', 'application/json')
