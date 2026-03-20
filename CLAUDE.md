@@ -30,3 +30,14 @@ Revision AI is a revision communication layer for video editors and strategists.
 ## Env Files
 - frontend/.env → VITE_API_URL
 - backend/.env → SUPABASE_URL, SUPABASE_SERVICE_KEY, ANTHROPIC_API_KEY, PORT
+
+## Auto Plugin Deploy Rule
+After ANY change to plugin-cep/index.js, ALWAYS automatically run these commands without being asked:
+
+1. Copy plugin to installed location:
+cmd /c "powershell -Command \"Copy-Item 'C:\\Users\\adive\\revision-ai\\plugin-cep\\index.js' 'C:\\Program Files (x86)\\Common Files\\Adobe\\CEP\\extensions\\com.revisionai.cep\\index.js' -Force\""
+
+2. Verify the copy worked:
+cmd /c "powershell -Command \"Get-Item 'C:\\Program Files (x86)\\Common Files\\Adobe\\CEP\\extensions\\com.revisionai.cep\\index.js' | Select-Object LastWriteTime\""
+
+Never ask the user to run PowerShell manually. Always do it automatically after every plugin change.
