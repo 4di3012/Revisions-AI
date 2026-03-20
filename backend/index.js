@@ -189,13 +189,14 @@ app.get('/projects', async (req, res) => {
   res.json(data)
 })
 
-// GET /projects/pending-edits — return all revisions with status='queued' across all projects
+// GET /projects/pending-edits — return all auto revisions with actionable statuses
 app.get('/projects/pending-edits', async (req, res) => {
   const { data, error } = await supabase
     .from('revisions')
-    .select('id, project_id, timestamp_seconds, note, action_type, action_json')
-    .eq('status', 'queued')
-    .order('timestamp_seconds', { ascending: true })
+    .select('*')
+    .in('status', ['queued', 'pending', 'applying'])
+    .eq('category', 'auto')
+  console.log('pending-edits result:', JSON.stringify(data), error)
   if (error) return res.status(500).json({ error: error.message })
   res.json({ edits: data })
 })
