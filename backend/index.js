@@ -339,6 +339,24 @@ app.patch('/revisions/:id/status', async (req, res) => {
   res.json(data)
 })
 
+// POST /admin/migrate — run once to add action_type, action_json, status columns
+// Requires DATABASE_URL in .env (Supabase: Settings → Database → Connection string → URI)
+app.post('/admin/migrate', async (req, res) => {
+  const { Client } = require('pg')
+  const client = new Client({ connectionString: process.env.DATABASE_URL })
+  try {
+    await client.connect()
+    await client.query('ALTER TABLE revisions ADD COLUMN IF NOT EXISTS action_type text')
+    await client.query('ALTER TABLE revisions ADD COLUMN IF NOT EXISTS action_json jsonb')
+    await client.query("ALTER TABLE revisions ADD COLUMN IF NOT EXISTS status text DEFAULT 'pending'")
+    res.json({ ok: true, message: 'Migration complete' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  } finally {
+    await client.end()
+  }
+})
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'revision-ai-backend' })
 })
