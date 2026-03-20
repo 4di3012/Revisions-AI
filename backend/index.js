@@ -121,6 +121,7 @@ app.post('/projects', async (req, res) => {
 // POST /projects/:id/upload — upload MP4 to R2, append to versions array, update video_url
 app.post('/projects/:id/upload', upload.single('video'), async (req, res) => {
   const { id } = req.params
+  if (!id) return res.status(400).json({ error: 'project id is required' })
   if (!req.file) return res.status(400).json({ error: 'video file is required' })
 
   // Parse optional revision_ids from multipart form field
@@ -145,14 +146,15 @@ app.post('/projects/:id/upload', upload.single('video'), async (req, res) => {
 
   const videoUrl = `${process.env.R2_PUBLIC_URL}/${key}`
 
-  // Fetch current versions array
+  // Fetch current versions array — use maybeSingle so missing row returns null instead of throwing
   const { data: existing, error: fetchError } = await supabase
     .from('projects')
     .select('versions')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
   if (fetchError) return res.status(500).json({ error: fetchError.message })
+  if (!existing) return res.status(404).json({ error: `Project ${id} not found` })
 
   const versions = Array.isArray(existing.versions) ? existing.versions : []
   const newVersion = {
@@ -162,15 +164,16 @@ app.post('/projects/:id/upload', upload.single('video'), async (req, res) => {
     edits_applied: revisionIds,
   }
 
-  const { data, error } = await supabase
+  // Update and return the row — no .single() here; we already confirmed exactly one row exists
+  const { data: rows, error } = await supabase
     .from('projects')
     .update({ video_url: videoUrl, versions: [...versions, newVersion] })
     .eq('id', id)
     .select()
-    .single()
 
   if (error) return res.status(500).json({ error: error.message })
-  res.json(data)
+  if (!rows || rows.length === 0) return res.status(404).json({ error: 'Project not found after update' })
+  res.json(rows[0])
 })
 
 // GET /projects — return all projects; optional ?status= filter
