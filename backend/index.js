@@ -11,60 +11,41 @@ const claude = require('./lib/claude')
 
 const upload = multer({ storage: multer.memoryStorage() })
 
-function classificationPrompt(note, timestamp_seconds) {
-  return `You are a video editing revision classifier for a professional ad production workflow.
+function secondsToTimecode(seconds) {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}:00`
+}
 
-When given a revision note and timestamp, you must:
-1. Classify it as "auto" (can be executed programmatically in Adobe Premiere via ExtendScript) or "human" (requires editor judgment)
-2. Output a structured JSON action for auto edits
+function classificationPrompt(note, timecode) {
+  return `You are a video editing revision classifier. Classify the revision note as auto or human based on these rules:
 
-AUTO actions and their JSON shapes:
+AUTO (can be executed programmatically in Premiere via ExtendScript):
+- Grammar/spelling/word changes → action_type: caption_text_change
+- Color code changes with hex value → action_type: lumetri_color
+- Saturation/temperature with numeric value → action_type: lumetri_color
+- Clip swaps with a LucidLink file path → action_type: clip_swap
+- Overlay additions with a file path → action_type: add_overlay
+- Reposition/resize with clear numeric value → action_type: basic_motion
+- Cut/trim with clear timecodes → action_type: cut_section
 
-Caption/text change:
-{"action":"caption_text_change","timecode":"00:00:11:00","track":"V5","find":"most","replace":"all"}
+HUMAN (requires editor judgment):
+- Speed ramps, transitions, font style changes, audio mixing, anything vague
 
-Clip swap (strategist will include LucidLink path in the note):
-{"action":"clip_swap","timecode":"00:00:23:00","track":"V1","new_file_path":"//lucidlink/path/to/clip.mp4","in_point":0,"out_point":5}
+Revision note: "${note}"
+Timecode: ${timecode}
 
-Color code change (hex color provided in note):
-{"action":"lumetri_color","timecode":"00:00:15:00","property":"color","value":"#FF2D55"}
-
-Saturation change:
-{"action":"lumetri_color","timecode":"00:00:15:00","property":"saturation","value":120}
-
-Temperature change:
-{"action":"lumetri_color","timecode":"00:00:15:00","property":"temperature","value":25}
-
-Add overlay:
-{"action":"add_overlay","timecode":"00:00:10:00","duration_seconds":3,"file_path":"//lucidlink/overlays/file.png","track":"V2"}
-
-Reposition/resize:
-{"action":"basic_motion","timecode":"00:00:08:00","property":"scale","value":110}
-
-Cut section:
-{"action":"cut_section","timecode_start":"00:00:20:00","timecode_end":"00:00:23:00"}
-
-HUMAN action (anything requiring creative judgment, font changes, speed ramps, transitions, audio mixing):
-{"action":"human","timecode":"00:00:30:00","reason":"brief explanation why editor must handle this"}
-
-EDITING CONTEXT:
-- Caption text changes (grammar, spelling, word swaps) = AUTO
-- Color code changes with a hex value = AUTO
-- Saturation/temperature with a numeric value = AUTO
-- Clip swaps where a LucidLink path is provided = AUTO
-- Overlay additions where a file path is provided = AUTO
-- Reposition/resize with a clear direction = AUTO
-- Speed ramps, transitions, creative reframing, font style changes, audio mixing = HUMAN
-- Anything vague or requiring judgment = HUMAN
-
-The revision note is: '${note}'
-The timestamp is: ${timestamp_seconds} seconds
-
-Respond ONLY with this JSON, no other text:
+Respond ONLY with valid JSON, no other text:
 {
   "category": "auto",
   "action_type": "caption_text_change",
-  "action_json": { }
+  "action_json": {
+    "action": "caption_text_change",
+    "timecode": "${timecode}",
+    "find": "word_to_find",
+    "replace": "replacement_word"
+  }
 }`
 }
 
@@ -222,7 +203,7 @@ app.get('/projects/:id', async (req, res) => {
   res.json({ ...project, revisions })
 })
 
-// POST /projects/:id/revisions — classify with Claude, then save
+// POST /projects/:id/revisions — insert row, classify with Claude, update row, return full result
 app.post('/projects/:id/revisions', async (req, res) => {
   const { id } = req.params
   const { timestamp_seconds, note } = req.body
@@ -231,19 +212,28 @@ app.post('/projects/:id/revisions', async (req, res) => {
     return res.status(400).json({ error: 'timestamp_seconds and note are required' })
   }
 
+  // Step 1: insert immediately so the note is saved even if Claude fails
+  const { data: inserted, error: insertError } = await supabase
+    .from('revisions')
+    .insert({ project_id: id, timestamp_seconds, note, status: 'pending' })
+    .select()
+    .single()
+
+  if (insertError) return res.status(500).json({ error: insertError.message })
+
+  // Step 2: classify with Claude
+  const timecode = secondsToTimecode(timestamp_seconds)
   let category = null
   let action_type = null
   let action_json = null
+
   try {
     const msg = await claude.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
-      messages: [{
-        role: 'user',
-        content: classificationPrompt(note, timestamp_seconds),
-      }],
+      messages: [{ role: 'user', content: classificationPrompt(note, timecode) }],
     })
-    const raw = msg.content[0].text.trim()
+    const raw = msg.content[0].text.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
     const parsed = JSON.parse(raw)
     if (parsed.category === 'auto' || parsed.category === 'human') {
       category = parsed.category
@@ -254,9 +244,11 @@ app.post('/projects/:id/revisions', async (req, res) => {
     console.error('Claude classification failed:', e.message)
   }
 
+  // Step 3: update row with classification results
   const { data, error } = await supabase
     .from('revisions')
-    .insert({ project_id: id, timestamp_seconds, note, category, action_type, action_json, status: 'pending' })
+    .update({ category, action_type, action_json })
+    .eq('id', inserted.id)
     .select()
     .single()
 
