@@ -61,13 +61,32 @@ function loadHumanRevisions() {
   xhr.send()
 }
 
-// Restore project name label on load
-if (currentProjectName && projectNameEl) {
-  projectNameEl.textContent = currentProjectName
+function clearProjectContext() {
+  currentProjectId = null
+  currentProjectName = null
+  localStorage.removeItem('revisionai_project_id')
+  localStorage.removeItem('revisionai_project_name')
+  if (projectNameEl) projectNameEl.textContent = ''
+  renderRevisions([])
 }
 
-// Load human revisions on startup if we have a project
-loadHumanRevisions()
+// On load: validate stored project ID still exists in the backend
+if (currentProjectId) {
+  var validateXhr = new XMLHttpRequest()
+  validateXhr.open('GET', API + '/projects/' + currentProjectId)
+  validateXhr.onload = function () {
+    if (validateXhr.status === 404) {
+      clearProjectContext()
+    } else if (validateXhr.status >= 200 && validateXhr.status < 300) {
+      if (projectNameEl && currentProjectName) projectNameEl.textContent = currentProjectName
+      loadHumanRevisions()
+    }
+  }
+  validateXhr.onerror = function () { /* network error — leave context as-is */ }
+  validateXhr.send()
+} else {
+  if (projectNameEl && currentProjectName) projectNameEl.textContent = currentProjectName
+}
 
 function setProgress(pct) {
   if (pct < 0) {
@@ -168,6 +187,33 @@ sendBtn.addEventListener('click', function () {
             return
           }
 
+          function createProjectThenUpload() {
+            setStatus('Creating project record…')
+            var postXhr = new XMLHttpRequest()
+            postXhr.open('POST', API + '/api/projects')
+            postXhr.setRequestHeader('Content-Type', 'application/json')
+            postXhr.onload = function () {
+              var projectData
+              try { projectData = JSON.parse(postXhr.responseText) } catch (e) {
+                setStatus('Error parsing project response', 'error')
+                sendBtn.disabled = false
+                return
+              }
+              if (postXhr.status < 200 || postXhr.status >= 300) {
+                setStatus('Error creating project: ' + (projectData.error || postXhr.status), 'error')
+                sendBtn.disabled = false
+                return
+              }
+              setProjectContext(projectData.id, projectName)
+              doUpload(projectData.id, [])
+            }
+            postXhr.onerror = function () {
+              setStatus('Network error creating project', 'error')
+              sendBtn.disabled = false
+            }
+            postXhr.send(JSON.stringify({ project_name: projectName, status: 'pending_qa' }))
+          }
+
           function doUpload(projectId, revisionIds) {
             setStatus('Uploading video…')
             var blob = new Blob([data], { type: 'video/mp4' })
@@ -185,10 +231,15 @@ sendBtn.addEventListener('click', function () {
                 exec('taskkill /F /IM "Adobe Media Encoder.exe"')
                 pendingRevisionIds = []
                 loadHumanRevisions()
+              } else if (uploadXhr.status === 404) {
+                // Project no longer exists — clear stale localStorage and retry as new project
+                setStatus('Stale project ID — creating new project…')
+                clearProjectContext()
+                createProjectThenUpload()
               } else {
                 setStatus('Upload error: ' + uploadXhr.status + ' ' + uploadXhr.responseText, 'error')
+                sendBtn.disabled = false
               }
-              sendBtn.disabled = false
             }
             uploadXhr.onerror = function () {
               setStatus('Network error during upload', 'error')
@@ -204,30 +255,7 @@ sendBtn.addEventListener('click', function () {
           }
 
           // First-time upload: create a new project record first
-          setStatus('Creating project record…')
-          var postXhr = new XMLHttpRequest()
-          postXhr.open('POST', API + '/api/projects')
-          postXhr.setRequestHeader('Content-Type', 'application/json')
-          postXhr.onload = function () {
-            var projectData
-            try { projectData = JSON.parse(postXhr.responseText) } catch (e) {
-              setStatus('Error parsing project response', 'error')
-              sendBtn.disabled = false
-              return
-            }
-            if (postXhr.status < 200 || postXhr.status >= 300) {
-              setStatus('Error creating project: ' + (projectData.error || postXhr.status), 'error')
-              sendBtn.disabled = false
-              return
-            }
-            setProjectContext(projectData.id, projectName)
-            doUpload(projectData.id, [])
-          }
-          postXhr.onerror = function () {
-            setStatus('Network error creating project', 'error')
-            sendBtn.disabled = false
-          }
-          postXhr.send(JSON.stringify({ project_name: projectName, status: 'pending_qa' }))
+          createProjectThenUpload()
         })
         }, 30000)
       })
