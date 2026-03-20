@@ -27,6 +27,15 @@ function setProjectContext(id, name) {
   if (projectNameEl) projectNameEl.textContent = name || ''
 }
 
+function clearProjectContext() {
+  currentProjectId = null
+  currentProjectName = null
+  localStorage.removeItem('revisionai_project_id')
+  localStorage.removeItem('revisionai_project_name')
+  if (projectNameEl) projectNameEl.textContent = ''
+  renderRevisions([])
+}
+
 function formatTc(seconds) {
   var m = Math.floor(seconds / 60)
   var s = Math.floor(seconds % 60)
@@ -61,15 +70,6 @@ function loadHumanRevisions() {
   xhr.send()
 }
 
-function clearProjectContext() {
-  currentProjectId = null
-  currentProjectName = null
-  localStorage.removeItem('revisionai_project_id')
-  localStorage.removeItem('revisionai_project_name')
-  if (projectNameEl) projectNameEl.textContent = ''
-  renderRevisions([])
-}
-
 // On load: validate stored project ID still exists in the backend
 if (currentProjectId) {
   var validateXhr = new XMLHttpRequest()
@@ -98,86 +98,49 @@ function setProgress(pct) {
   progressText.textContent = pct + '%'
 }
 
-function base64ToBlob(base64, contentType) {
-  var binary = atob(base64)
-  var bytes = new Uint8Array(binary.length)
-  for (var i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return new Blob([bytes], { type: contentType || 'video/mp4' })
-}
-
-function uploadBlob(presignedUrl, blob, onProgress) {
-  return new Promise(function (resolve, reject) {
-    var xhr = new XMLHttpRequest()
-    xhr.open('PUT', presignedUrl)
-    xhr.setRequestHeader('Content-Type', 'video/mp4')
-    xhr.upload.onprogress = function (e) {
-      if (e.lengthComputable && onProgress) {
-        onProgress(Math.round((e.loaded / e.total) * 100))
-      }
-    }
-    xhr.onload = function () {
-      if (xhr.status >= 200 && xhr.status < 300) resolve()
-      else reject(new Error('Upload failed: ' + xhr.status))
-    }
-    xhr.onerror = function () { reject(new Error('Network error during upload')) }
-    xhr.send(blob)
-  })
+// Bring Premiere Pro window back into focus
+function focusPremiere(exec) {
+  exec('powershell -command "(New-Object -ComObject Shell.Application).Windows() | Where-Object {$_.Name -like \'*Premiere*\'} | ForEach-Object { $_.Visible = $true }"')
+  exec('powershell -command "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::AppActivate(\'Adobe Premiere Pro\')"')
 }
 
 var INFO_SCRIPT = 'app.project.path + "|" + app.project.activeSequence.name'
 
-sendBtn.addEventListener('click', function () {
+// Core export + upload flow — called by both Send to QA and auto-edits poll completion
+function runExportAndUpload(projectPath, projectName) {
   sendBtn.disabled = true
   setProgress(-1)
-  setStatus('Getting project info…')
 
-  // Step 1: get project path and sequence name
-  csInterface.evalScript(INFO_SCRIPT, function (result) {
-    if (!result || result === 'undefined' || result.indexOf('|') === -1) {
-      setStatus('No active project/sequence. Open a sequence in Premiere first.', 'error')
-      sendBtn.disabled = false
-      return
-    }
+  var exec = require('child_process').exec
+  var fs = require('fs')
+  var path = require('path')
 
-    var parts = result.split('|')
-    var projectPath = parts[0]
-    var projectName = parts[1]
+  var projectDir = path.dirname(projectPath)
+  var outputPath = path.join(projectDir, projectName + '.mp4')
+  var presetPath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\MediaIO\\systempresets\\4E49434B_48323634\\Facebook 1080p HD.epr'
+  var amePath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe'
 
-    setStatus('Launching AME export…')
+  var encodeCmd = '"' + amePath + '" -encode "' + projectPath + '" "' + projectName + '" "' + outputPath + '" "' + presetPath + '"'
 
-    // Step 2: launch AME CLI via Node.js child_process
-    var exec = require('child_process').exec
-    var fs = require('fs')
-    var path = require('path')
+  fs.writeFileSync('C:\\Users\\adive\\ame-debug.txt', 'encodeCmd: ' + encodeCmd + '\noutputPath: ' + outputPath + '\n')
 
-    var projectDir = path.dirname(projectPath)
-    var outputPath = path.join(projectDir, projectName + '.mp4')
-    var presetPath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\MediaIO\\systempresets\\4E49434B_48323634\\Facebook 1080p HD.epr'
-    var amePath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe'
-    var writeFileSync = fs.writeFileSync
+  setStatus('Launching AME…')
+  exec('"' + amePath + '"')
 
-    var encodeCmd = '"' + amePath + '" -encode "' + projectPath + '" "' + projectName + '" "' + outputPath + '" "' + presetPath + '"'
+  // Wait 15s for AME to fully load, then send encode command
+  setTimeout(function () {
+    setStatus('Exporting… do not close Premiere')
 
-    writeFileSync('C:\\Users\\adive\\ame-debug.txt', 'encodeCmd: ' + encodeCmd + '\noutputPath: ' + outputPath + '\n')
+    exec(encodeCmd, function (error, stdout, stderr) {
+      fs.writeFileSync('C:\\Users\\adive\\ame-result.txt',
+        'error: ' + (error ? error.message : 'none') + '\nstdout: ' + stdout + '\nstderr: ' + stderr
+      )
 
-    setStatus('Launching AME…')
+      // Switch back to Premiere immediately after encode command fires
+      focusPremiere(exec)
 
-    // Launch AME in background first
-    exec('"C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe"')
-
-    // Wait 15 seconds for AME to fully load, then send encode command
-    setTimeout(function () {
-      setStatus('Exporting… please wait')
-
-      exec(encodeCmd, function (error, stdout, stderr) {
-        writeFileSync('C:\\Users\\adive\\ame-result.txt',
-          'error: ' + (error ? error.message : 'none') + '\nstdout: ' + stdout + '\nstderr: ' + stderr
-        )
-
-        // Wait 30s from when the encode command fires, then upload
-        setTimeout(function () {
+      // Wait 30s for AME to finish encoding, then read and upload
+      setTimeout(function () {
         setStatus('Reading exported file…')
 
         fs.readFile(outputPath, function (readErr, data) {
@@ -227,8 +190,10 @@ sendBtn.addEventListener('click', function () {
             uploadXhr.open('POST', API + '/projects/' + projectId + '/upload')
             uploadXhr.onload = function () {
               if (uploadXhr.status >= 200 && uploadXhr.status < 300) {
-                setStatus('Sent to QA: ' + projectName, 'success')
+                setStatus('Upload complete — check dashboard', 'success')
                 exec('taskkill /F /IM "Adobe Media Encoder.exe"')
+                // Refocus Premiere after AME closes
+                setTimeout(function () { focusPremiere(exec) }, 1500)
                 pendingRevisionIds = []
                 loadHumanRevisions()
               } else if (uploadXhr.status === 404) {
@@ -236,10 +201,11 @@ sendBtn.addEventListener('click', function () {
                 setStatus('Stale project ID — creating new project…')
                 clearProjectContext()
                 createProjectThenUpload()
+                return
               } else {
                 setStatus('Upload error: ' + uploadXhr.status + ' ' + uploadXhr.responseText, 'error')
-                sendBtn.disabled = false
               }
+              sendBtn.disabled = false
             }
             uploadXhr.onerror = function () {
               setStatus('Network error during upload', 'error')
@@ -257,9 +223,24 @@ sendBtn.addEventListener('click', function () {
           // First-time upload: create a new project record first
           createProjectThenUpload()
         })
-        }, 30000)
-      })
-    }, 15000)
+      }, 30000)
+    })
+  }, 15000)
+}
+
+sendBtn.addEventListener('click', function () {
+  sendBtn.disabled = true
+  setProgress(-1)
+  setStatus('Getting project info…')
+
+  csInterface.evalScript(INFO_SCRIPT, function (result) {
+    if (!result || result === 'undefined' || result.indexOf('|') === -1) {
+      setStatus('No active project/sequence. Open a sequence in Premiere first.', 'error')
+      sendBtn.disabled = false
+      return
+    }
+    var parts = result.split('|')
+    runExportAndUpload(parts[0], parts[1])
   })
 })
 
@@ -380,7 +361,7 @@ function pollPendingEdits() {
     if (edits.length === 0) return
 
     pollActive = true
-    setStatus('Dashboard sent ' + edits.length + ' edit' + (edits.length > 1 ? 's' : '') + '…')
+    setStatus('Applying edits…')
 
     var idx = 0
     var appliedIds = []
@@ -397,11 +378,20 @@ function pollPendingEdits() {
 
     function executeNext() {
       if (idx >= edits.length) {
-        setStatus('All edits applied. Exporting…')
         pollActive = false
         loadHumanRevisions()
         pendingRevisionIds = appliedIds.slice()
-        sendBtn.click()
+
+        // Get current project info then run the export directly
+        setStatus('Edits applied — starting export…')
+        csInterface.evalScript(INFO_SCRIPT, function (result) {
+          if (!result || result === 'undefined' || result.indexOf('|') === -1) {
+            setStatus('Edits applied but no active sequence found for export', 'error')
+            return
+          }
+          var parts = result.split('|')
+          runExportAndUpload(parts[0], parts[1])
+        })
         return
       }
 
