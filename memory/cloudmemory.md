@@ -27,3 +27,43 @@
 \n## Commit: 44b21ae — feat: presigned URL upload flow with progress bar — 2026-03-19 14:50:49 -0500
 \n## Commit: 48c50de — feat: scaffold Adobe UXP plugin for Premiere Pro — 2026-03-19 15:11:42 -0500
 \n## Commit: 47cd7aa — fix: allow null origin in CORS for CEP plugin (local file protocol) — 2026-03-19 16:06:39 -0500
+\n## Commit: b021d12 — fix: allow null origin for CEP plugin CORS — 2026-03-19 16:07:47 -0500
+\n## Commit: d976cd7 — fix: allow file:// origin in CORS for CEP panel — 2026-03-19 16:14:18 -0500
+\n## Commit: 1d33922 — feat: add POST /api/projects route for CEP plugin with debug logging — 2026-03-19 16:20:06 -0500
+\n## Commit: 866c88e — feat: add /qa route, QA dashboard, and GET /api/projects endpoint — 2026-03-19 16:25:58 -0500
+\n## Commit: 22d3b1e — fix: wire sidebar QA Needed link to /qa, fix badge count, add debug logging — 2026-03-19 16:28:18 -0500
+\n## Commit: 4821d78 — fix: save video_url in POST /api/projects, graceful fallback in ReviewPage — 2026-03-19 16:55:07 -0500
+\n## Commit: 3e202f2 — feat: CEP full export+upload flow — 2026-03-19 17:00:36 -0500
+
+## CEP Plugin — AME Export + Upload (2026-03-19)
+
+### What works
+- Node.js enabled in CEP via `--enable-nodejs` flag in manifest.xml `<CEFCommandLine>`
+- AME CLI export: `exec('"Adobe Media Encoder.exe" -encode "projectPath" "seqName" "outputPath" "presetPath"')`
+- AME ignores the output path argument — file lands at `path.dirname(projectPath) + seqName + ".mp4"`
+- Preset confirmed working: `4E49434B_48323634/Facebook 1080p HD.epr`
+- Full flow: Send to QA → AME export (exec) → 30s wait → fs.readFile → POST /api/projects → POST /projects/:id/upload → R2 → dashboard video appears
+
+### Key lessons
+- `form-data` npm package does NOT work in CEP Node.js context — use browser `FormData` + `XMLHttpRequest` instead
+- Upload endpoint is `POST /projects/:id/upload` (not `/api/projects/:id/upload-video`)
+- Two-step upload: first POST `/api/projects` to get projectId, then POST `/projects/:id/upload` with multipart form
+- CEP manifest host version must be `[25.0,99.9]` to cover Premiere 2026 (v26)
+- `require('child_process')` and `require('fs')` work once `--enable-nodejs` is in manifest
+- Premiere must be fully restarted (not just panel reload) after manifest changes
+\n## Commit: 65f8981 — feat: structured AI classification, auto-edit execution pipeline, Apply Auto Edits button — 2026-03-19 21:06:16 -0500
+\n## Commit: 23bb83f — feat: add /admin/migrate endpoint via pg for revisions table DDL — 2026-03-19 21:13:15 -0500
+\n## Commit: 299f24c — feat: dashboard Apply Auto Edits button, backend queue endpoints, plugin polling — 2026-03-19 21:16:57 -0500
+\n## Commit: c16365e — fix: insert revision first, then classify and update — returns full classification in response — 2026-03-19 21:24:30 -0500
+\n## Commit: 15873dd — feat: human revisions panel, project name display, localStorage persistence — 2026-03-19 21:33:07 -0500
+\n## Commit: 940caa2 — feat: Essential Graphics caption fix, versioned uploads, version comparison UI — 2026-03-19 21:45:24 -0500
+\n## Commit: 7f8ecfb — feat: version history side-by-side comparison on review page — 2026-03-19 21:51:32 -0500
+\n## Commit: 89f9447 — fix: prevent single() coercion error in upload endpoint — 2026-03-19 21:56:21 -0500
+\n## Commit: 4d6dfc4 — feat: stale project ID recovery in CEP plugin — 2026-03-19 22:02:43 -0500
+\n## Commit: b409ce9 — feat: refactor export flow, Premiere refocus, fix auto-edits export trigger — 2026-03-19 22:13:06 -0500
+\n## Commit: 70722f5 — feat: full diagnostic ExtendScript for all action types — 2026-03-19 22:23:09 -0500
+\n## Commit: 4dc902d — fix: caption_text_change diagnostics — matched clips only, deeper property inspection — 2026-03-19 22:31:11 -0500
+\n## Commit: 7e37875 — feat: ExtendScript debug log to file + pre-export alert gate — 2026-03-19 22:38:18 -0500
+\n## Commit: e0e306e — fix: caption_text_change TextDocument — use .toString() and textDoc.text — 2026-03-19 22:47:22 -0500
+\n## Commit: efeab6f — fix: caption_text_change direct evalScript with TextDocument fix — 2026-03-20 00:16:13 -0500
+\n## Commit: 1c555fd — fix: remove dangling quote left by caption_text_change block deletion — 2026-03-20 00:18:11 -0500
