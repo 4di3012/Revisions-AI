@@ -20,6 +20,8 @@ export default function ReviewPage() {
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [applyingEdits, setApplyingEdits] = useState(false)
+  const [applyMsg, setApplyMsg] = useState('')
 
   useEffect(() => {
     axios.get(`${API}/projects/${id}`).then(({ data }) => {
@@ -60,6 +62,24 @@ export default function ReviewPage() {
     }
   }
 
+  const pendingAutoEdits = revisions.filter(r => r.category === 'auto' && r.status === 'pending')
+
+  async function handleApplyEdits() {
+    setApplyingEdits(true)
+    setApplyMsg('Sending to Premiere…')
+    try {
+      await axios.post(`${API}/projects/${id}/apply-edits`)
+      setApplyMsg('Edits applied! New export incoming…')
+      setRevisions(prev => prev.map(r =>
+        r.category === 'auto' && r.status === 'pending' ? { ...r, status: 'queued' } : r
+      ))
+    } catch (err) {
+      setApplyMsg('Error: ' + (err.response?.data?.error || err.message))
+    } finally {
+      setApplyingEdits(false)
+    }
+  }
+
   if (!project) {
     return <div className="loading-screen">Loading project…</div>
   }
@@ -85,10 +105,24 @@ export default function ReviewPage() {
         <button
           className="btn btn-primary"
           onClick={handleAddNote}
-          style={{ marginBottom: 24 }}
+          style={{ marginBottom: 12 }}
         >
           + Add Revision Note
         </button>
+
+        {pendingAutoEdits.length > 0 && (
+          <div style={{ marginBottom: 24 }}>
+            <button
+              className="btn btn-primary"
+              onClick={handleApplyEdits}
+              disabled={applyingEdits}
+              style={{ background: 'linear-gradient(135deg,#10b981,#059669)', marginBottom: applyMsg ? 8 : 0 }}
+            >
+              {applyingEdits ? 'Sending to Premiere…' : `Apply ${pendingAutoEdits.length} Auto Edit${pendingAutoEdits.length > 1 ? 's' : ''}`}
+            </button>
+            {applyMsg && <p style={{ fontSize: 13, color: applyMsg.startsWith('Error') ? '#f87171' : '#4ade80', margin: 0 }}>{applyMsg}</p>}
+          </div>
+        )}
 
         {showForm && (
           <div className="note-panel">
@@ -136,7 +170,7 @@ export default function ReviewPage() {
                 <span className="revision-timestamp">{formatTime(r.timestamp_seconds)}</span>
                 <span className="revision-note">{r.note}</span>
                 <span className={`revision-badge revision-badge-${r.category ?? 'pending'}`}>
-                  {r.category === 'small' ? 'Auto' : r.category === 'big' ? 'Needs Editor' : 'Unclassified'}
+                  {r.category === 'auto' ? 'Auto' : r.category === 'human' ? 'Needs Editor' : 'Unclassified'}
                 </span>
               </div>
             ))

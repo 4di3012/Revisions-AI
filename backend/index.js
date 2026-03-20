@@ -188,6 +188,17 @@ app.get('/projects', async (req, res) => {
   res.json(data)
 })
 
+// GET /projects/pending-edits — return all revisions with status='queued' across all projects
+app.get('/projects/pending-edits', async (req, res) => {
+  const { data, error } = await supabase
+    .from('revisions')
+    .select('id, project_id, timestamp_seconds, note, action_type, action_json')
+    .eq('status', 'queued')
+    .order('timestamp_seconds', { ascending: true })
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ edits: data })
+})
+
 // GET /projects/:id — return project with its revisions ordered by timestamp
 app.get('/projects/:id', async (req, res) => {
   const { id } = req.params
@@ -251,6 +262,30 @@ app.post('/projects/:id/revisions', async (req, res) => {
 
   if (error) return res.status(500).json({ error: error.message })
   res.status(201).json(data)
+})
+
+// POST /projects/:id/apply-edits — queue all pending auto revisions for plugin execution
+app.post('/projects/:id/apply-edits', async (req, res) => {
+  const { id } = req.params
+
+  const { data: edits, error: fetchError } = await supabase
+    .from('revisions')
+    .select('id, timestamp_seconds, note, action_type, action_json, project_id')
+    .eq('project_id', id)
+    .eq('category', 'auto')
+    .eq('status', 'pending')
+    .order('timestamp_seconds', { ascending: true })
+
+  if (fetchError) return res.status(500).json({ error: fetchError.message })
+  if (edits.length === 0) return res.json({ edits: [] })
+
+  const { error: updateError } = await supabase
+    .from('revisions')
+    .update({ status: 'queued' })
+    .in('id', edits.map(e => e.id))
+
+  if (updateError) return res.status(500).json({ error: updateError.message })
+  res.json({ edits })
 })
 
 // GET /api/upload-url?filename=xxx&filetype=yyy — presigned PUT URL for CEP plugin uploads

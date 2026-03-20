@@ -5,7 +5,6 @@ var API = 'https://revision-ai-backend-a4sx.onrender.com'
 var currentProjectId = null
 
 var sendBtn      = document.getElementById('sendBtn')
-var applyBtn     = document.getElementById('applyBtn')
 var statusEl     = document.getElementById('status')
 var progressWrap = document.getElementById('progressWrap')
 var progressBar  = document.getElementById('progressBar')
@@ -136,7 +135,6 @@ sendBtn.addEventListener('click', function () {
 
             var projectId = projectData.id
             currentProjectId = projectId
-            applyBtn.disabled = false
             setStatus('Uploading video…')
 
             var blob = new Blob([data], { type: 'video/mp4' })
@@ -256,45 +254,46 @@ function buildExecuteScript(actionJson) {
   ].join('\n')
 }
 
-applyBtn.addEventListener('click', function () {
-  if (!currentProjectId) {
-    setStatus('No project exported yet. Export first.', 'error')
-    return
-  }
+// Poll backend every 5s for queued edits triggered from the dashboard
+var pollActive = false
 
-  applyBtn.disabled = true
-  setStatus('Fetching auto edits…')
+function pollPendingEdits() {
+  if (pollActive) return
 
-  var fetchXhr = new XMLHttpRequest()
-  fetchXhr.open('GET', API + '/projects/' + currentProjectId + '/auto-edits')
-  fetchXhr.onload = function () {
-    var editsData
-    try { editsData = JSON.parse(fetchXhr.responseText) } catch (e) {
-      setStatus('Error parsing edits response', 'error')
-      applyBtn.disabled = false
-      return
-    }
+  var xhr = new XMLHttpRequest()
+  xhr.open('GET', API + '/projects/pending-edits')
+  xhr.onload = function () {
+    var data
+    try { data = JSON.parse(xhr.responseText) } catch (e) { return }
 
-    var edits = editsData.edits || []
-    if (edits.length === 0) {
-      setStatus('No pending auto edits.', 'success')
-      applyBtn.disabled = false
-      return
-    }
+    var edits = data.edits || []
+    if (edits.length === 0) return
 
-    setStatus('Applying ' + edits.length + ' edit' + (edits.length > 1 ? 's' : '') + '…')
+    pollActive = true
+    setStatus('Dashboard sent ' + edits.length + ' edit' + (edits.length > 1 ? 's' : '') + '…')
+
     var idx = 0
 
-    function applyNext() {
+    function markApplying(i) {
+      if (i >= edits.length) { executeNext(); return }
+      var xhr2 = new XMLHttpRequest()
+      xhr2.open('PATCH', API + '/revisions/' + edits[i].id + '/status')
+      xhr2.setRequestHeader('Content-Type', 'application/json')
+      xhr2.onload = function () { markApplying(i + 1) }
+      xhr2.onerror = function () { markApplying(i + 1) }
+      xhr2.send(JSON.stringify({ status: 'applying' }))
+    }
+
+    function executeNext() {
       if (idx >= edits.length) {
         setStatus('All edits applied. Exporting…')
-        applyBtn.disabled = false
+        pollActive = false
         sendBtn.click()
         return
       }
 
       var edit = edits[idx]
-      setStatus('Edit ' + (idx + 1) + ' of ' + edits.length + '…')
+      setStatus('Applying edit ' + (idx + 1) + ' of ' + edits.length + '…')
 
       var script = buildExecuteScript(edit.action_json)
       csInterface.evalScript(script, function (result) {
@@ -303,17 +302,16 @@ applyBtn.addEventListener('click', function () {
         var patchXhr = new XMLHttpRequest()
         patchXhr.open('PATCH', API + '/revisions/' + edit.id + '/status')
         patchXhr.setRequestHeader('Content-Type', 'application/json')
-        patchXhr.onload = function () { idx++; applyNext() }
-        patchXhr.onerror = function () { idx++; applyNext() }
+        patchXhr.onload = function () { idx++; executeNext() }
+        patchXhr.onerror = function () { idx++; executeNext() }
         patchXhr.send(JSON.stringify({ status: newStatus }))
       })
     }
 
-    applyNext()
+    markApplying(0)
   }
-  fetchXhr.onerror = function () {
-    setStatus('Network error fetching edits', 'error')
-    applyBtn.disabled = false
-  }
-  fetchXhr.send()
-})
+  xhr.onerror = function () { /* silent */ }
+  xhr.send()
+}
+
+setInterval(pollPendingEdits, 5000)
