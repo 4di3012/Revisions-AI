@@ -295,6 +295,7 @@ app.post('/projects/:id/revisions', async (req, res) => {
 // POST /projects/:id/apply-edits — reset ALL auto revisions to queued for plugin execution
 app.post('/projects/:id/apply-edits', async (req, res) => {
   const { id } = req.params
+  console.log('apply-edits called for project:', id)
 
   const { data: edits, error: fetchError } = await supabase
     .from('revisions')
@@ -306,13 +307,15 @@ app.post('/projects/:id/apply-edits', async (req, res) => {
   if (fetchError) return res.status(500).json({ error: fetchError.message })
   if (edits.length === 0) return res.json({ edits: [] })
 
-  const { data, error: updateError } = await supabase
+  const { data: updateData, error: updateError } = await supabase
     .from('revisions')
     .update({ status: 'queued' })
     .eq('project_id', id)
     .eq('category', 'auto')
+    .select()
 
-  if (updateError) return res.status(500).json({ error: updateError.message })
+  console.log('update result:', JSON.stringify(updateData), updateError)
+  if (updateError) return res.status(500).json({ error: updateError.message, detail: updateError })
   res.json({ edits })
 })
 

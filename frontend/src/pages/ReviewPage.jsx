@@ -167,21 +167,25 @@ export default function ReviewPage() {
   }
 
   const autoEdits = revisions.filter(r => r.category === 'auto')
-  const pendingAutoEdits = revisions.filter(r => r.category === 'auto' && r.status === 'pending')
+  const applyTimeoutRef = useRef(null)
 
   async function handleApplyEdits() {
     setApplyingEdits(true)
-    setApplyMsg('Sending to Premiere…')
+    setApplyMsg('Auto Edits Applying…')
+
+    // Safety timeout — reset after 60s no matter what
+    applyTimeoutRef.current = setTimeout(() => {
+      setApplyingEdits(false)
+      setApplyMsg('Timed out — click to retry')
+    }, 60000)
+
     try {
       await axios.post(`${API}/projects/${id}/apply-edits`)
-      setApplyMsg('Queued — Premiere is applying edits…')
+      // Stay in applying state — plugin will complete and new version will appear
+      // User can see status via applyMsg; button resets on timeout or error only
     } catch (err) {
+      clearTimeout(applyTimeoutRef.current)
       setApplyMsg('Error: ' + (err.response?.data?.error || err.message))
-      // Reset any queued revisions back to pending so they can be retried
-      setRevisions(prev => prev.map(r =>
-        r.category === 'auto' && r.status === 'queued' ? { ...r, status: 'pending' } : r
-      ))
-    } finally {
       setApplyingEdits(false)
     }
   }
@@ -223,16 +227,23 @@ export default function ReviewPage() {
             <button
               className="btn btn-primary"
               onClick={handleApplyEdits}
-              disabled={applyingEdits || pendingAutoEdits.length === 0}
-              style={{ background: 'linear-gradient(135deg,#10b981,#059669)', marginBottom: applyMsg ? 8 : 0 }}
+              disabled={applyingEdits}
+              style={{
+                background: applyingEdits
+                  ? 'linear-gradient(135deg,#f59e0b,#d97706)'
+                  : 'linear-gradient(135deg,#10b981,#059669)',
+                marginBottom: applyMsg ? 8 : 0,
+              }}
             >
               {applyingEdits
-                ? <><span className="spinner" /> Sending to Premiere…</>
-                : pendingAutoEdits.length > 0
-                  ? `Apply ${pendingAutoEdits.length} Auto Edit${pendingAutoEdits.length > 1 ? 's' : ''}`
-                  : 'Auto Edits Queued'}
+                ? <><span className="spinner" /> Auto Edits Applying…</>
+                : 'Apply Auto Edits'}
             </button>
-            {applyMsg && <p style={{ fontSize: 13, color: applyMsg.startsWith('Error') ? '#f87171' : '#4ade80', margin: 0 }}>{applyMsg}</p>}
+            {applyMsg && (
+              <p style={{ fontSize: 13, color: applyMsg.startsWith('Error') || applyMsg.startsWith('Timed') ? '#f87171' : '#4ade80', margin: 0 }}>
+                {applyMsg}
+              </p>
+            )}
           </div>
         )}
 
