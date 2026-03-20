@@ -291,91 +291,29 @@ function buildExecuteScript(actionJson) {
     '',
     '    // ── caption_text_change ──────────────────────────────────────────',
     '    if (a === "caption_text_change") {',
-    '      var lf = new File("C:/Users/adive/revision-ai/extendscript-debug.log");',
-    '      lf.open("w");',
-    '      lf.writeln("=== caption_text_change debug ===");',
-    '      lf.writeln("find=[" + action.find + "]  replace=[" + action.replace + "]");',
-    '      lf.writeln("timecode=" + action.timecode + "  targetSec=" + targetSec.toFixed(3) + "  TOL=" + TOL);',
-    '      lf.writeln("matched clips: " + matched.length);',
-    '      lf.writeln("---");',
     '      var textFound = false;',
-    '      for (var mi=0; mi<matched.length; mi++) {',
+    '      for (var mi=0; mi<matched.length && !textFound; mi++) {',
     '        var cl = matched[mi].clip;',
-    '        lf.writeln("CLIP: " + cl.name + "  track=V" + (matched[mi].ti+1) + "  " + cl.start.seconds.toFixed(2) + "s-" + cl.end.seconds.toFixed(2) + "s");',
-    '',
-    '        // projectItem info',
-    '        if (cl.projectItem) {',
-    '          try {',
-    '            var pit = cl.projectItem;',
-    '            lf.writeln("  projectItem.name=" + pit.name + "  type=" + pit.type);',
-    '            lf.writeln("  treePath=" + (pit.treePath || "n/a"));',
-    '            var isClipType = (typeof ProjectItemType !== "undefined") ? (pit.type === ProjectItemType.CLIP) : "ProjectItemType undefined";',
-    '            lf.writeln("  isClipType=" + isClipType);',
-    '          } catch(pie) { lf.writeln("  projectItem err: " + pie.message); }',
-    '        } else { lf.writeln("  no projectItem"); }',
-    '',
-    '        // Walk all components + every property',
     '        var comps = cl.components;',
-    '        lf.writeln("  components: " + comps.numItems);',
-    '        for (var cii=0; cii<comps.numItems; cii++) {',
+    '        for (var cii=0; cii<comps.numItems && !textFound; cii++) {',
     '          var comp = comps[cii];',
-    '          lf.writeln("  Comp[" + cii + "] displayName=" + comp.displayName + "  matchName=" + (comp.matchName||"?"));',
-    '          for (var pi=0; pi<comp.properties.numItems; pi++) {',
+    '          for (var pi=0; pi<comp.properties.numItems && !textFound; pi++) {',
     '            var prop = comp.properties[pi];',
-    '            var val = ""; var valT = "";',
-    '            try { val = String(prop.getValue()); } catch(pe) { val = "[getValue err: " + pe.message + "]"; }',
-    '            try { valT = String(prop.getValueAtTime(targetSec)); } catch(pte) { valT = "[getValueAtTime err: " + pte.message + "]"; }',
-    '            lf.writeln("    Prop[" + pi + "] " + prop.displayName);',
-    '            lf.writeln("      getValue      = " + val);',
-    '            lf.writeln("      getValueAtTime= " + valT);',
-    '',
-    '            var useVal  = (val.toLowerCase().indexOf(action.find.toLowerCase())  !== -1) ? val  : null;',
-    '            var useValT = (!useVal && valT.toLowerCase().indexOf(action.find.toLowerCase()) !== -1) ? valT : null;',
-    '            if ((useVal || useValT) && !textFound) {',
-    '              var src = useVal || useValT;',
-    '              var replaced = src.replace(new RegExp(action.find, "gi"), action.replace);',
+    '            if (prop.displayName === "Source Text") {',
     '              try {',
-    '                prop.setValue(replaced);',
-    '                lf.writeln("      >>> REPLACED via setValue on " + prop.displayName);',
-    '                textFound = true;',
-    '              } catch(sve) {',
-    '                lf.writeln("      >>> setValue failed: " + sve.message + " — trying setValueAtTime");',
-    '                try {',
-    '                  prop.setValueAtTime(targetSec, replaced);',
-    '                  lf.writeln("      >>> REPLACED via setValueAtTime");',
+    '                var textDoc = prop.getValue();',
+    '                var currentText = textDoc.toString();',
+    '                if (currentText.toLowerCase().indexOf(action.find.toLowerCase()) !== -1) {',
+    '                  textDoc.text = currentText.replace(new RegExp(action.find, "gi"), action.replace);',
+    '                  prop.setValue(textDoc);',
     '                  textFound = true;',
-    '                } catch(svte) { lf.writeln("      >>> setValueAtTime also failed: " + svte.message); }',
-    '              }',
+    '                }',
+    '              } catch(ste) { /* skip this property */ }',
     '            }',
     '          }',
     '        }',
-    '',
-    '        // getMGTComponent probe',
-    '        if (cl.getMGTComponent) {',
-    '          try {',
-    '            var mgt = cl.getMGTComponent();',
-    '            if (mgt) {',
-    '              lf.writeln("  getMGTComponent: " + mgt.properties.numItems + " props");',
-    '              for (var mpi=0; mpi<mgt.properties.numItems; mpi++) {',
-    '                var mp = mgt.properties[mpi];',
-    '                var mv = ""; try { mv = String(mp.getValue()); } catch(mpe) { mv = "[err: " + mpe.message + "]"; }',
-    '                lf.writeln("    MGT[" + mpi + "] " + mp.displayName + " = " + mv);',
-    '                if (!textFound && mv.toLowerCase().indexOf(action.find.toLowerCase()) !== -1) {',
-    '                  try {',
-    '                    mp.setValue(mv.replace(new RegExp(action.find, "gi"), action.replace));',
-    '                    lf.writeln("    >>> MGT REPLACED [" + action.find + "]");',
-    '                    textFound = true;',
-    '                  } catch(mse) { lf.writeln("    >>> MGT setValue err: " + mse.message); }',
-    '                }',
-    '              }',
-    '            } else { lf.writeln("  getMGTComponent => null"); }',
-    '          } catch(mgte) { lf.writeln("  getMGTComponent err: " + mgte.message); }',
-    '        } else { lf.writeln("  getMGTComponent: not available"); }',
-    '        lf.writeln("---");',
     '      }',
     '      result = textFound ? "OK" : "ERROR: text [" + action.find + "] not found";',
-    '      lf.writeln("RESULT: " + result);',
-    '      lf.close();',
     '    }',
     '',
     '    // ── lumetri_color ────────────────────────────────────────────────',
@@ -568,7 +506,7 @@ function buildExecuteScript(actionJson) {
     '    }',
     '',
     '    log.push("RESULT: " + result);',
-    '    if (a !== "caption_text_change") { alert(log.join("\\n")); }',
+    '    alert(log.join("\\n"));',
     '    $.writeln("RESULT: " + result);',
     '    return result;',
     '  } catch(e) {',
@@ -617,34 +555,15 @@ function pollPendingEdits() {
         loadHumanRevisions()
         pendingRevisionIds = appliedIds.slice()
 
-        // Read ExtendScript debug log if it was written, show it, then export
-        setStatus('Edits applied — checking debug log…')
+        // Get current project info then run the export directly
+        setStatus('Edits applied — starting export…')
         csInterface.evalScript(INFO_SCRIPT, function (result) {
           if (!result || result === 'undefined' || result.indexOf('|') === -1) {
             setStatus('Edits applied but no active sequence found for export', 'error')
             return
           }
           var parts = result.split('|')
-          var fs2 = require('fs')
-          var logPath = 'C:/Users/adive/revision-ai/extendscript-debug.log'
-          var logContent = ''
-          try {
-            if (fs2.existsSync(logPath)) {
-              logContent = fs2.readFileSync(logPath, 'utf8')
-            }
-          } catch (readErr) { /* ignore */ }
-
-          if (logContent) {
-            // Show log in Premiere alert, then start export after user dismisses
-            setStatus('Debug log ready — check Premiere alert…')
-            csInterface.evalScript('alert(' + JSON.stringify('=== ExtendScript Debug Log ===\n' + logContent) + ')', function () {
-              setStatus('Edits applied — starting export…')
-              runExportAndUpload(parts[0], parts[1])
-            })
-          } else {
-            setStatus('Edits applied — starting export…')
-            runExportAndUpload(parts[0], parts[1])
-          }
+          runExportAndUpload(parts[0], parts[1])
         })
         return
       }
