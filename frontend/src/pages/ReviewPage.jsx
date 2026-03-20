@@ -166,6 +166,7 @@ export default function ReviewPage() {
     }
   }
 
+  const autoEdits = revisions.filter(r => r.category === 'auto')
   const pendingAutoEdits = revisions.filter(r => r.category === 'auto' && r.status === 'pending')
 
   async function handleApplyEdits() {
@@ -173,12 +174,13 @@ export default function ReviewPage() {
     setApplyMsg('Sending to Premiere…')
     try {
       await axios.post(`${API}/projects/${id}/apply-edits`)
-      setApplyMsg('Edits applied! New export incoming…')
-      setRevisions(prev => prev.map(r =>
-        r.category === 'auto' && r.status === 'pending' ? { ...r, status: 'queued' } : r
-      ))
+      setApplyMsg('Queued — Premiere is applying edits…')
     } catch (err) {
       setApplyMsg('Error: ' + (err.response?.data?.error || err.message))
+      // Reset any queued revisions back to pending so they can be retried
+      setRevisions(prev => prev.map(r =>
+        r.category === 'auto' && r.status === 'queued' ? { ...r, status: 'pending' } : r
+      ))
     } finally {
       setApplyingEdits(false)
     }
@@ -216,15 +218,19 @@ export default function ReviewPage() {
           + Add Revision Note
         </button>
 
-        {pendingAutoEdits.length > 0 && (
+        {autoEdits.length > 0 && (
           <div style={{ marginBottom: 24 }}>
             <button
               className="btn btn-primary"
               onClick={handleApplyEdits}
-              disabled={applyingEdits}
+              disabled={applyingEdits || pendingAutoEdits.length === 0}
               style={{ background: 'linear-gradient(135deg,#10b981,#059669)', marginBottom: applyMsg ? 8 : 0 }}
             >
-              {applyingEdits ? 'Sending to Premiere…' : `Apply ${pendingAutoEdits.length} Auto Edit${pendingAutoEdits.length > 1 ? 's' : ''}`}
+              {applyingEdits
+                ? <><span className="spinner" /> Sending to Premiere…</>
+                : pendingAutoEdits.length > 0
+                  ? `Apply ${pendingAutoEdits.length} Auto Edit${pendingAutoEdits.length > 1 ? 's' : ''}`
+                  : 'Auto Edits Queued'}
             </button>
             {applyMsg && <p style={{ fontSize: 13, color: applyMsg.startsWith('Error') ? '#f87171' : '#4ade80', margin: 0 }}>{applyMsg}</p>}
           </div>

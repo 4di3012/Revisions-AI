@@ -511,6 +511,7 @@ function pollPendingEdits() {
 
     var idx = 0
     var appliedIds = []
+    var anyFailed = false
 
     function markApplying(i) {
       if (i >= edits.length) { executeNext(); return }
@@ -526,9 +527,14 @@ function pollPendingEdits() {
       if (idx >= edits.length) {
         pollActive = false
         loadHumanRevisions()
-        pendingRevisionIds = appliedIds.slice()
 
-        // Get current project info then run the export directly
+        if (anyFailed) {
+          setStatus('One or more edits failed — export blocked. Fix and retry.', 'error')
+          sendBtn.disabled = false
+          return
+        }
+
+        pendingRevisionIds = appliedIds.slice()
         setStatus('Edits applied — starting export…')
         csInterface.evalScript(INFO_SCRIPT, function (result) {
           if (!result || result === 'undefined' || result.indexOf('|') === -1) {
@@ -555,6 +561,7 @@ function pollPendingEdits() {
       }
 
       function markRevisionFailed(id) {
+        anyFailed = true
         var xhr = new XMLHttpRequest()
         xhr.open('PATCH', API + '/revisions/' + id + '/status')
         xhr.setRequestHeader('Content-Type', 'application/json')
@@ -565,14 +572,14 @@ function pollPendingEdits() {
 
       if (edit.action_json && edit.action_json.action === 'caption_text_change') {
         var aj = edit.action_json
-        // timecode_seconds may not be in action_json — fall back to revision timestamp
-        var tcSec = (aj.timecode_seconds !== undefined) ? aj.timecode_seconds : edit.timestamp_seconds
-        var script = 'var result = "none"; try { var seq = app.project.activeSequence; var targetSec = ' + tcSec + '; var findText = ' + JSON.stringify(aj.find) + '; var replaceText = ' + JSON.stringify(aj.replace) + '; for (var t = 0; t < seq.videoTracks.numTracks; t++) { var track = seq.videoTracks[t]; for (var c = 0; c < track.clips.numItems; c++) { var clip = track.clips[c]; if (clip.start.seconds <= targetSec + 5 && clip.end.seconds >= targetSec - 5) { for (var i = 0; i < clip.components.numItems; i++) { var comp = clip.components[i]; for (var p = 0; p < comp.properties.numItems; p++) { var prop = comp.properties[p]; if (prop.displayName === "Source Text") { try { var td = prop.getValue(); var txt = td.text; alert("BEFORE: [" + td.text + "]"); if (txt.toLowerCase().indexOf(findText.toLowerCase()) !== -1) { td.text = txt.replace(new RegExp(findText, "gi"), replaceText); prop.setValue(td); alert("AFTER: [" + td.text + "]"); result = "success"; } } catch(e) {} } } } } } } } catch(err) { result = "error: " + err.toString(); } result;'
+        var editId = edit.id
+        var script = 'var foundWords = []; var result = "not found"; try { var seq = app.project.activeSequence; var findText = ' + JSON.stringify(aj.find) + '; var replaceText = ' + JSON.stringify(aj.replace) + '; for (var t = 0; t < seq.videoTracks.numTracks; t++) { var track = seq.videoTracks[t]; for (var c = 0; c < track.clips.numItems; c++) { var clip = track.clips[c]; for (var i = 0; i < clip.components.numItems; i++) { var comp = clip.components[i]; for (var p = 0; p < comp.properties.numItems; p++) { var prop = comp.properties[p]; if (prop.displayName === "Source Text") { try { var currentText = prop.getValue(); if (typeof currentText === "string" && currentText.trim() !== "") { foundWords.push(currentText); if (currentText.toLowerCase() === findText.toLowerCase()) { prop.setValue(replaceText); result = "success"; } } } catch(e) {} } } } } } } catch(err) { result = "error: " + err.toString(); } if (result !== "success") { result = "not found — words on timeline: " + foundWords.join("|"); } result;'
         csInterface.evalScript(script, function (result) {
+          alert('ExtendScript result: ' + result)
           if (result === 'success') {
-            markRevisionApplied(edit.id)
+            markRevisionApplied(editId)
           } else {
-            markRevisionFailed(edit.id)
+            markRevisionFailed(editId)
           }
         })
         return
