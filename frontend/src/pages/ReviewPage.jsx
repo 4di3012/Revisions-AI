@@ -23,79 +23,92 @@ function VersionHistory({ versions, revisions }) {
     return revisions.filter(r => v.edits_applied.includes(r.id))
   }
 
+  function EditList({ v }) {
+    const edits = editsForVersion(v)
+    if (edits.length === 0) return (
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '8px 0 0' }}>Original upload — no auto edits.</p>
+    )
+    return (
+      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {edits.map(r => (
+          <div key={r.id} className="revision-card">
+            <span className="revision-timestamp">{formatTime(r.timestamp_seconds)}</span>
+            <span className="revision-note">{r.note}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const colLabel = {
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    color: 'var(--text-muted)',
+    marginBottom: 8,
+  }
+
   return (
-    <div style={{ marginTop: 32 }}>
-      <h2 className="revisions-heading">Version History</h2>
-      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
+    <div style={{ marginTop: 32, marginBottom: 8 }}>
+      <h2 className="revisions-heading" style={{ marginBottom: 16 }}>Version History</h2>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+
         {/* Left: version selector + player */}
-        <div style={{ flex: 1, minWidth: 280 }}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-            {versions.map((v, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedIdx(i)}
-                className="btn"
-                style={{
-                  padding: '4px 12px',
-                  fontSize: 13,
-                  background: selectedIdx === i ? 'var(--accent)' : 'var(--surface2)',
-                  color: selectedIdx === i ? '#fff' : 'var(--text-muted)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                }}
-              >
-                V{v.version_number}
-              </button>
-            ))}
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div style={colLabel}>Compare</div>
+            <select
+              value={selectedIdx}
+              onChange={e => setSelectedIdx(Number(e.target.value))}
+              style={{
+                background: 'var(--surface2)',
+                color: 'var(--text)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                padding: '4px 10px',
+                fontSize: 13,
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              {versions.map((v, i) => (
+                <option key={i} value={i}>V{v.version_number}</option>
+              ))}
+            </select>
           </div>
           <video
+            key={selected.url}
             src={selected.url}
             controls
-            style={{ width: '100%', borderRadius: 8, background: '#000' }}
+            style={{ width: '100%', borderRadius: 8, background: '#000', display: 'block' }}
           />
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
-              Edits in V{selected.version_number}
-            </div>
-            {editsForVersion(selected).length === 0 ? (
-              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Original upload — no auto edits.</p>
-            ) : (
-              editsForVersion(selected).map(r => (
-                <div key={r.id} className="revision-card" style={{ marginBottom: 6 }}>
-                  <span className="revision-timestamp">{formatTime(r.timestamp_seconds)}</span>
-                  <span className="revision-note">{r.note}</span>
-                </div>
-              ))
-            )}
-          </div>
+          <div style={{ ...colLabel, marginTop: 10 }}>Edits in V{selected.version_number}</div>
+          <EditList v={selected} />
         </div>
-        {/* Right: latest version */}
-        <div style={{ flex: 1, minWidth: 280 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
-            Latest — V{latest.version_number}
+
+        {/* Right: latest */}
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div style={colLabel}>Latest</div>
+            <span style={{
+              background: 'var(--accent)',
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 700,
+              padding: '3px 8px',
+              borderRadius: 4,
+            }}>V{latest.version_number}</span>
           </div>
           <video
             src={latest.url}
             controls
-            style={{ width: '100%', borderRadius: 8, background: '#000' }}
+            style={{ width: '100%', borderRadius: 8, background: '#000', display: 'block' }}
           />
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
-              Edits in V{latest.version_number}
-            </div>
-            {editsForVersion(latest).length === 0 ? (
-              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Original upload — no auto edits.</p>
-            ) : (
-              editsForVersion(latest).map(r => (
-                <div key={r.id} className="revision-card" style={{ marginBottom: 6 }}>
-                  <span className="revision-timestamp">{formatTime(r.timestamp_seconds)}</span>
-                  <span className="revision-note">{r.note}</span>
-                </div>
-              ))
-            )}
-          </div>
+          <div style={{ ...colLabel, marginTop: 10 }}>Edits in V{latest.version_number}</div>
+          <EditList v={latest} />
         </div>
+
       </div>
     </div>
   )
