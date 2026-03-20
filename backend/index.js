@@ -118,11 +118,16 @@ app.post('/projects', async (req, res) => {
   res.status(201).json(data)
 })
 
-// POST /projects/:id/upload — upload MP4 to R2, update video_url
+// POST /projects/:id/upload — upload MP4 to R2, append to versions array, update video_url
 app.post('/projects/:id/upload', upload.single('video'), async (req, res) => {
   const { id } = req.params
-  console.log('R2 endpoint:', `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`)
   if (!req.file) return res.status(400).json({ error: 'video file is required' })
+
+  // Parse optional revision_ids from multipart form field
+  let revisionIds = []
+  if (req.body.revision_ids) {
+    try { revisionIds = JSON.parse(req.body.revision_ids) } catch (_) {}
+  }
 
   const key = `${id}/${Date.now()}.mp4`
 
@@ -134,20 +139,32 @@ app.post('/projects/:id/upload', upload.single('video'), async (req, res) => {
       ContentType: 'video/mp4',
     }))
   } catch (uploadError) {
-    console.error('R2 upload failed:')
-    console.error('  code:     ', uploadError.code)
-    console.error('  message:  ', uploadError.message)
-    console.error('  $metadata:', uploadError.$metadata)
-    console.error('  cause:    ', uploadError.cause)
-    await supabase.from('projects').delete().eq('id', id)
+    console.error('R2 upload failed:', uploadError.message)
     return res.status(500).json({ error: uploadError.message })
   }
 
   const videoUrl = `${process.env.R2_PUBLIC_URL}/${key}`
 
+  // Fetch current versions array
+  const { data: existing, error: fetchError } = await supabase
+    .from('projects')
+    .select('versions')
+    .eq('id', id)
+    .single()
+
+  if (fetchError) return res.status(500).json({ error: fetchError.message })
+
+  const versions = Array.isArray(existing.versions) ? existing.versions : []
+  const newVersion = {
+    version_number: versions.length + 1,
+    url: videoUrl,
+    uploaded_at: new Date().toISOString(),
+    edits_applied: revisionIds,
+  }
+
   const { data, error } = await supabase
     .from('projects')
-    .update({ video_url: videoUrl })
+    .update({ video_url: videoUrl, versions: [...versions, newVersion] })
     .eq('id', id)
     .select()
     .single()
@@ -379,6 +396,21 @@ app.patch('/revisions/:id/status', async (req, res) => {
     .single()
   if (error) return res.status(500).json({ error: error.message })
   res.json(data)
+})
+
+// POST /admin/migrate-versions — run once to add versions column to projects
+app.post('/admin/migrate-versions', async (req, res) => {
+  const { Client } = require('pg')
+  const client = new Client({ connectionString: process.env.DATABASE_URL })
+  try {
+    await client.connect()
+    await client.query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS versions jsonb DEFAULT '[]'")
+    res.json({ ok: true, message: 'versions column added' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  } finally {
+    await client.end()
+  }
 })
 
 // POST /admin/migrate — run once to add action_type, action_json, status columns

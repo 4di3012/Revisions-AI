@@ -10,6 +10,97 @@ function formatTime(seconds) {
   return `${m}:${s}`
 }
 
+function VersionHistory({ versions, revisions }) {
+  const [selectedIdx, setSelectedIdx] = useState(0)
+
+  if (!versions || versions.length <= 1) return null
+
+  const latest = versions[versions.length - 1]
+  const selected = versions[selectedIdx]
+
+  function editsForVersion(v) {
+    if (!v.edits_applied || v.edits_applied.length === 0) return []
+    return revisions.filter(r => v.edits_applied.includes(r.id))
+  }
+
+  return (
+    <div style={{ marginTop: 32 }}>
+      <h2 className="revisions-heading">Version History</h2>
+      <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
+        {/* Left: version selector + player */}
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            {versions.map((v, i) => (
+              <button
+                key={i}
+                onClick={() => setSelectedIdx(i)}
+                className="btn"
+                style={{
+                  padding: '4px 12px',
+                  fontSize: 13,
+                  background: selectedIdx === i ? 'var(--accent)' : 'var(--surface2)',
+                  color: selectedIdx === i ? '#fff' : 'var(--text-muted)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                }}
+              >
+                V{v.version_number}
+              </button>
+            ))}
+          </div>
+          <video
+            src={selected.url}
+            controls
+            style={{ width: '100%', borderRadius: 8, background: '#000' }}
+          />
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
+              Edits in V{selected.version_number}
+            </div>
+            {editsForVersion(selected).length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Original upload — no auto edits.</p>
+            ) : (
+              editsForVersion(selected).map(r => (
+                <div key={r.id} className="revision-card" style={{ marginBottom: 6 }}>
+                  <span className="revision-timestamp">{formatTime(r.timestamp_seconds)}</span>
+                  <span className="revision-note">{r.note}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        {/* Right: latest version */}
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>
+            Latest — V{latest.version_number}
+          </div>
+          <video
+            src={latest.url}
+            controls
+            style={{ width: '100%', borderRadius: 8, background: '#000' }}
+          />
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
+              Edits in V{latest.version_number}
+            </div>
+            {editsForVersion(latest).length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Original upload — no auto edits.</p>
+            ) : (
+              editsForVersion(latest).map(r => (
+                <div key={r.id} className="revision-card" style={{ marginBottom: 6 }}>
+                  <span className="revision-timestamp">{formatTime(r.timestamp_seconds)}</span>
+                  <span className="revision-note">{r.note}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ReviewPage() {
   const { id } = useParams()
   const videoRef = useRef(null)
@@ -101,6 +192,8 @@ export default function ReviewPage() {
             </div>
           )}
         </div>
+
+        <VersionHistory versions={project.versions} revisions={revisions} />
 
         <button
           className="btn btn-primary"

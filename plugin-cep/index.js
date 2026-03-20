@@ -4,6 +4,7 @@ var API = 'https://revision-ai-backend-a4sx.onrender.com'
 
 var currentProjectId = localStorage.getItem('revisionai_project_id') || null
 var currentProjectName = localStorage.getItem('revisionai_project_name') || null
+var pendingRevisionIds = [] // revision IDs applied before current export
 
 var sendBtn        = document.getElementById('sendBtn')
 var statusEl       = document.getElementById('status')
@@ -167,9 +168,43 @@ sendBtn.addEventListener('click', function () {
             return
           }
 
-          setStatus('Creating project record…')
+          function doUpload(projectId, revisionIds) {
+            setStatus('Uploading video…')
+            var blob = new Blob([data], { type: 'video/mp4' })
+            var formData = new FormData()
+            formData.append('video', blob, projectName + '.mp4')
+            if (revisionIds && revisionIds.length > 0) {
+              formData.append('revision_ids', JSON.stringify(revisionIds))
+            }
 
-          // Create project first to get the ID
+            var uploadXhr = new XMLHttpRequest()
+            uploadXhr.open('POST', API + '/projects/' + projectId + '/upload')
+            uploadXhr.onload = function () {
+              if (uploadXhr.status >= 200 && uploadXhr.status < 300) {
+                setStatus('Sent to QA: ' + projectName, 'success')
+                exec('taskkill /F /IM "Adobe Media Encoder.exe"')
+                pendingRevisionIds = []
+                loadHumanRevisions()
+              } else {
+                setStatus('Upload error: ' + uploadXhr.status + ' ' + uploadXhr.responseText, 'error')
+              }
+              sendBtn.disabled = false
+            }
+            uploadXhr.onerror = function () {
+              setStatus('Network error during upload', 'error')
+              sendBtn.disabled = false
+            }
+            uploadXhr.send(formData)
+          }
+
+          // If we already have a project (re-export after auto edits), upload to it directly
+          if (currentProjectId) {
+            doUpload(currentProjectId, pendingRevisionIds)
+            return
+          }
+
+          // First-time upload: create a new project record first
+          setStatus('Creating project record…')
           var postXhr = new XMLHttpRequest()
           postXhr.open('POST', API + '/api/projects')
           postXhr.setRequestHeader('Content-Type', 'application/json')
@@ -185,32 +220,8 @@ sendBtn.addEventListener('click', function () {
               sendBtn.disabled = false
               return
             }
-
-            var projectId = projectData.id
-            setProjectContext(projectId, projectName)
-            setStatus('Uploading video…')
-
-            var blob = new Blob([data], { type: 'video/mp4' })
-            var formData = new FormData()
-            formData.append('video', blob, projectName + '.mp4')
-
-            var uploadXhr = new XMLHttpRequest()
-            uploadXhr.open('POST', API + '/projects/' + projectId + '/upload')
-            uploadXhr.onload = function () {
-              if (uploadXhr.status >= 200 && uploadXhr.status < 300) {
-                setStatus('Sent to QA: ' + projectName, 'success')
-                exec('taskkill /F /IM "Adobe Media Encoder.exe"')
-                loadHumanRevisions()
-              } else {
-                setStatus('Upload error: ' + uploadXhr.status + ' ' + uploadXhr.responseText, 'error')
-              }
-              sendBtn.disabled = false
-            }
-            uploadXhr.onerror = function () {
-              setStatus('Network error during upload', 'error')
-              sendBtn.disabled = false
-            }
-            uploadXhr.send(formData)
+            setProjectContext(projectData.id, projectName)
+            doUpload(projectData.id, [])
           }
           postXhr.onerror = function () {
             setStatus('Network error creating project', 'error')
@@ -247,14 +258,31 @@ function buildExecuteScript(actionJson) {
     '    }',
     '    var a = action.action;',
     '    if (a === "caption_text_change") {',
-    '      var sec=tcToSec(action.timecode); var clip=clipAt(tidx(action.track),sec);',
-    '      if (!clip) return "ERROR: no clip at "+action.timecode+" on "+action.track;',
-    '      var mgc=clip.getMGTComponent();',
-    '      if (!mgc) return "ERROR: no graphics component";',
-    '      var param=mgc.properties.getParamForDisplayName("Edit Text");',
-    '      if (!param) return "ERROR: no Edit Text param";',
-    '      param.setValue(param.getValue().split(action.find).join(action.replace));',
-    '      return "OK";',
+    '      var tcSec = action.timecode_seconds !== undefined ? action.timecode_seconds : tcToSec(action.timecode);',
+    '      var tol = 2.0; var found = false;',
+    '      for (var t=0; t<seq.videoTracks.numTracks; t++) {',
+    '        var tr=seq.videoTracks[t];',
+    '        for (var c=0; c<tr.clips.numItems; c++) {',
+    '          var cl=tr.clips[c];',
+    '          if (cl.start.seconds <= tcSec+tol && cl.end.seconds >= tcSec-tol) {',
+    '            var comps=cl.components;',
+    '            for (var ci=0; ci<comps.numItems; ci++) {',
+    '              var comp=comps[ci];',
+    '              for (var pi=0; pi<comp.properties.numItems; pi++) {',
+    '                var prop=comp.properties[pi];',
+    '                if (prop.displayName === "Source Text") {',
+    '                  var cur=prop.getValue();',
+    '                  if (cur.toLowerCase().indexOf(action.find.toLowerCase()) !== -1) {',
+    '                    prop.setValue(cur.replace(new RegExp(action.find,"gi"),action.replace));',
+    '                    found=true;',
+    '                  }',
+    '                }',
+    '              }',
+    '            }',
+    '          }',
+    '        }',
+    '      }',
+    '      return found ? "OK" : "ERROR: text not found across all tracks";',
     '    }',
     '    if (a === "lumetri_color") {',
     '      var sec=tcToSec(action.timecode); var clip=clipAt(tidx(action.track||"V1"),sec);',
@@ -327,6 +355,7 @@ function pollPendingEdits() {
     setStatus('Dashboard sent ' + edits.length + ' edit' + (edits.length > 1 ? 's' : '') + '…')
 
     var idx = 0
+    var appliedIds = []
 
     function markApplying(i) {
       if (i >= edits.length) { executeNext(); return }
@@ -343,6 +372,7 @@ function pollPendingEdits() {
         setStatus('All edits applied. Exporting…')
         pollActive = false
         loadHumanRevisions()
+        pendingRevisionIds = appliedIds.slice()
         sendBtn.click()
         return
       }
@@ -353,6 +383,7 @@ function pollPendingEdits() {
       var script = buildExecuteScript(edit.action_json)
       csInterface.evalScript(script, function (result) {
         var newStatus = (result && result.indexOf('ERROR') === -1) ? 'applied' : 'failed'
+        if (newStatus === 'applied') appliedIds.push(edit.id)
 
         var patchXhr = new XMLHttpRequest()
         patchXhr.open('PATCH', API + '/revisions/' + edit.id + '/status')
