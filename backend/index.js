@@ -203,6 +203,21 @@ app.get('/projects/:id', async (req, res) => {
   res.json({ ...project, revisions })
 })
 
+// GET /projects/:id/revisions — return revisions for a project; optional ?category= filter
+app.get('/projects/:id/revisions', async (req, res) => {
+  const { id } = req.params
+  const { category } = req.query
+  let query = supabase
+    .from('revisions')
+    .select('*')
+    .eq('project_id', id)
+    .order('timestamp_seconds', { ascending: true })
+  if (category) query = query.eq('category', category)
+  const { data, error } = await query
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ revisions: data })
+})
+
 // POST /projects/:id/revisions — insert row, classify with Claude, update row, return full result
 app.post('/projects/:id/revisions', async (req, res) => {
   const { id } = req.params

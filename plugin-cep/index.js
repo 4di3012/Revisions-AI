@@ -2,18 +2,71 @@ var csInterface = new CSInterface()
 
 var API = 'https://revision-ai-backend-a4sx.onrender.com'
 
-var currentProjectId = null
+var currentProjectId = localStorage.getItem('revisionai_project_id') || null
+var currentProjectName = localStorage.getItem('revisionai_project_name') || null
 
-var sendBtn      = document.getElementById('sendBtn')
-var statusEl     = document.getElementById('status')
-var progressWrap = document.getElementById('progressWrap')
-var progressBar  = document.getElementById('progressBar')
-var progressText = document.getElementById('progressText')
+var sendBtn        = document.getElementById('sendBtn')
+var statusEl       = document.getElementById('status')
+var progressWrap   = document.getElementById('progressWrap')
+var progressBar    = document.getElementById('progressBar')
+var progressText   = document.getElementById('progressText')
+var projectNameEl  = document.getElementById('projectName')
+var revisionsList  = document.getElementById('revisionsList')
 
 function setStatus(message, type) {
   statusEl.textContent = message
   statusEl.className = 'status' + (type ? ' ' + type : '')
 }
+
+function setProjectContext(id, name) {
+  currentProjectId = id
+  currentProjectName = name
+  localStorage.setItem('revisionai_project_id', id)
+  localStorage.setItem('revisionai_project_name', name)
+  if (projectNameEl) projectNameEl.textContent = name || ''
+}
+
+function formatTc(seconds) {
+  var m = Math.floor(seconds / 60)
+  var s = Math.floor(seconds % 60)
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s
+}
+
+function renderRevisions(revisions) {
+  if (!revisionsList) return
+  if (!revisions || revisions.length === 0) {
+    revisionsList.innerHTML = '<div class="revisions-empty">No manual revisions yet.</div>'
+    return
+  }
+  revisionsList.innerHTML = revisions.map(function (r) {
+    return '<div class="revision-item">' +
+      '<span class="revision-tc">' + formatTc(r.timestamp_seconds) + '</span>' +
+      '<span class="revision-note">' + r.note + '</span>' +
+      '</div>'
+  }).join('')
+}
+
+function loadHumanRevisions() {
+  if (!currentProjectId) return
+  var xhr = new XMLHttpRequest()
+  xhr.open('GET', API + '/projects/' + currentProjectId + '/revisions?category=human')
+  xhr.onload = function () {
+    try {
+      var data = JSON.parse(xhr.responseText)
+      renderRevisions(data.revisions || [])
+    } catch (e) { /* silent */ }
+  }
+  xhr.onerror = function () { /* silent */ }
+  xhr.send()
+}
+
+// Restore project name label on load
+if (currentProjectName && projectNameEl) {
+  projectNameEl.textContent = currentProjectName
+}
+
+// Load human revisions on startup if we have a project
+loadHumanRevisions()
 
 function setProgress(pct) {
   if (pct < 0) {
@@ -134,7 +187,7 @@ sendBtn.addEventListener('click', function () {
             }
 
             var projectId = projectData.id
-            currentProjectId = projectId
+            setProjectContext(projectId, projectName)
             setStatus('Uploading video…')
 
             var blob = new Blob([data], { type: 'video/mp4' })
@@ -147,6 +200,7 @@ sendBtn.addEventListener('click', function () {
               if (uploadXhr.status >= 200 && uploadXhr.status < 300) {
                 setStatus('Sent to QA: ' + projectName, 'success')
                 exec('taskkill /F /IM "Adobe Media Encoder.exe"')
+                loadHumanRevisions()
               } else {
                 setStatus('Upload error: ' + uploadXhr.status + ' ' + uploadXhr.responseText, 'error')
               }
@@ -288,6 +342,7 @@ function pollPendingEdits() {
       if (idx >= edits.length) {
         setStatus('All edits applied. Exporting…')
         pollActive = false
+        loadHumanRevisions()
         sendBtn.click()
         return
       }
