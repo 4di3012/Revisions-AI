@@ -1,0 +1,6 @@
+The fix adds two missing flags to the AME CLI command:
+
+- **`-sequence "CL_HATO_C28_CUSTOM_1_9x16"`** — tells AME exactly which sequence to add to the encode queue. Without this, AME opens the project but has no target, so it shows the "Choose Items to Import" dialog asking the user to pick.
+- **`-output "<path>"`** — gives AME the output file destination. Without it, AME may still prompt.
+
+The `sequenceName` and `outputPath` are now accepted as optional request body fields. If omitted, `sequenceName` defaults to `CL_HATO_C28_CUSTOM_1_9x16` and `outputPath` defaults to the project directory + `<sequenceName>_export.mp4`. The response also now returns `outputPath` so the caller knows where the file will land.

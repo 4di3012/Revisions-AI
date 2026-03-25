@@ -534,20 +534,36 @@ app.post('/apply-caption-edit', async (req, res) => {
 })
 
 // POST /export-video — launch AME CLI against a prproj file
-// Accepts { projectPath }; responds immediately and runs AME in background
+// Accepts { projectPath, sequenceName?, outputPath? }; responds immediately and runs AME in background
+// -sequence targets a named sequence to avoid the "Choose Items to Import" dialog
+// -output gives AME the destination file path so it doesn't prompt
 app.post('/export-video', (req, res) => {
-  const { projectPath } = req.body
+  const { projectPath, sequenceName, outputPath } = req.body
   if (!projectPath) {
     return res.status(400).json({ error: 'projectPath is required' })
   }
 
   const { exec } = require('child_process')
+  const path = require('path')
+
   const amePath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe'
   const presetPath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\MediaIO\\systempresets\\4E49434B_48323634\\Facebook 1080p HD.epr'
-  const encodeCmd = '"' + amePath + '" -project "' + projectPath + '" -preset "' + presetPath + '"'
+
+  const seqName = sequenceName || 'CL_HATO_C28_CUSTOM_1_9x16'
+  const outPath = outputPath || path.join(path.dirname(projectPath), seqName + '_export.mp4')
+
+  // -sequence <name> : tells AME exactly which sequence to queue (no import dialog)
+  // -output <path>   : destination file so AME doesn't prompt for location
+  const encodeCmd = [
+    '"' + amePath + '"',
+    '-project', '"' + projectPath + '"',
+    '-sequence', '"' + seqName + '"',
+    '-preset', '"' + presetPath + '"',
+    '-output', '"' + outPath + '"',
+  ].join(' ')
 
   console.log('export-video: running AME:', encodeCmd)
-  res.json({ success: true })
+  res.json({ success: true, outputPath: outPath })
 
   exec(encodeCmd, (err, stdout, stderr) => {
     if (err) console.error('export-video: AME error:', err.message)
