@@ -543,15 +543,16 @@ app.post('/export-video', (req, res) => {
 
   const { exec } = require('child_process')
   const amePath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe'
-  const presetPath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\MediaIO\\systempresets\\4E49434B_48323634\\Facebook 1080p HD.epr'
-  const encodeCmd = '"' + amePath + '" -project "' + projectPath + '" -preset "' + presetPath + '"'
+  // -project queues the prproj in AME; -preset is not a valid CLI flag and causes
+  // AME to attempt importing the .epr as media, resulting in "File Import Failure"
+  const encodeCmd = '"' + amePath + '" -project "' + projectPath + '"'
 
-  console.log('export-video: running AME:', encodeCmd)
+  console.log('export-video: launching AME:', encodeCmd)
   res.json({ success: true })
 
   exec(encodeCmd, (err, stdout, stderr) => {
     if (err) console.error('export-video: AME error:', err.message)
-    else console.log('export-video: AME done', stdout, stderr)
+    else console.log('export-video: AME launched', stdout, stderr)
   })
 })
 
