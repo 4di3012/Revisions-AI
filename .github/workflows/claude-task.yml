@@ -31,10 +31,9 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          OUTPUT=$(claude --dangerously-skip-permissions -p "$ISSUE_BODY" 2>&1)
-          echo "CLAUDE_OUTPUT<<EOF" >> $GITHUB_OUTPUT
-          echo "$OUTPUT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          OUTPUT=$(claude --dangerously-skip-permissions --print -p "$ISSUE_BODY" 2>&1) || true
+echo "Exit code: $?"
+echo "Output: $OUTPUT"
 
       - name: Commit and push changes
         id: commit
