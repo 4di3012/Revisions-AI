@@ -1,3 +1,4 @@
+// Revision AI Backend - Last updated by Claude Code automation
 require('dotenv').config({ path: require('path').join(__dirname, '.env') })
 
 const express = require('express')
