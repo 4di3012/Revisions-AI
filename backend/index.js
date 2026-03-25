@@ -534,14 +534,17 @@ app.post('/apply-caption-edit', async (req, res) => {
 })
 
 // POST /export-video — launch AME CLI against a prproj file
-// Accepts { projectPath }; responds immediately and runs AME in background
+// Accepts { projectPath, outputPath, projectId }; responds immediately and runs AME in background
+// After AME exits, polls outputPath until the file appears, uploads to R2, updates project video_url
 app.post('/export-video', (req, res) => {
-  const { projectPath } = req.body
+  const { projectPath, outputPath, projectId } = req.body
   if (!projectPath) {
     return res.status(400).json({ error: 'projectPath is required' })
   }
 
   const { exec } = require('child_process')
+  const fs = require('fs')
+  const path = require('path')
   const amePath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe'
   // -project queues the prproj in AME; -preset is not a valid CLI flag and causes
   // AME to attempt importing the .epr as media, resulting in "File Import Failure"
@@ -551,8 +554,59 @@ app.post('/export-video', (req, res) => {
   res.json({ success: true })
 
   exec(encodeCmd, (err, stdout, stderr) => {
-    if (err) console.error('export-video: AME error:', err.message)
-    else console.log('export-video: AME launched', stdout, stderr)
+    if (err) {
+      console.error('export-video: AME error:', err.message)
+      return
+    }
+    console.log('export-video: AME launched', stdout, stderr)
+
+    if (!outputPath || !projectId) {
+      console.log('export-video: no outputPath/projectId provided, skipping upload')
+      return
+    }
+
+    // Poll for output file every 5s, up to 10 minutes
+    const POLL_INTERVAL = 5000
+    const POLL_TIMEOUT = 10 * 60 * 1000
+    const started = Date.now()
+
+    const poll = setInterval(async () => {
+      if (!fs.existsSync(outputPath)) {
+        if (Date.now() - started > POLL_TIMEOUT) {
+          clearInterval(poll)
+          console.error('export-video: timed out waiting for output file:', outputPath)
+        }
+        return
+      }
+
+      clearInterval(poll)
+      console.log('export-video: output file found, uploading to R2:', outputPath)
+
+      try {
+        const fileBuffer = fs.readFileSync(outputPath)
+        const key = `exports/${projectId}/${path.basename(outputPath)}`
+
+        await r2.send(new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME,
+          Key: key,
+          Body: fileBuffer,
+          ContentType: 'video/mp4',
+        }))
+
+        const videoUrl = `${process.env.R2_PUBLIC_URL}/${key}`
+        console.log('export-video: R2 upload complete:', videoUrl)
+
+        const { error } = await supabase
+          .from('projects')
+          .update({ video_url: videoUrl })
+          .eq('id', projectId)
+
+        if (error) console.error('export-video: supabase update failed:', error.message)
+        else console.log('export-video: project video_url updated:', projectId)
+      } catch (uploadErr) {
+        console.error('export-video: upload/update failed:', uploadErr.message)
+      }
+    }, POLL_INTERVAL)
   })
 })
 
