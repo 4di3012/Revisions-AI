@@ -563,7 +563,6 @@ function pollPendingEdits() {
                     } else {
                       var msg = 'export-video failed\nstatus: ' + exportXhr.status + '\nresponse: ' + exportXhr.responseText
                       console.error(msg)
-                      alert(msg)
                     }
                   }
                   exportXhr.onerror = function () {
@@ -580,20 +579,17 @@ function pollPendingEdits() {
             } else {
               var msg = 'apply-caption-edit failed\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
               console.error(msg)
-              alert(msg)
               markRevisionFailed(editId)
             }
           }
           patchXhr.onerror = function () {
             var msg = 'apply-caption-edit XHR error — backend unreachable\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
             console.error(msg)
-            alert(msg)
             markRevisionFailed(editId)
           }
           patchXhr.ontimeout = function () {
             var msg = 'apply-caption-edit XHR timeout (10s)\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
             console.error(msg)
-            alert(msg)
             markRevisionFailed(editId)
           }
           patchXhr.timeout = 10000

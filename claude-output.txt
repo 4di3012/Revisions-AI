@@ -1,0 +1,7 @@
+All 4 `alert()` calls removed. Errors are still logged via the existing `console.error(msg)` calls on the lines immediately before each removed alert. No functional code was touched.
+
+Per CLAUDE.md, you need to manually copy the plugin:
+
+```powershell
+Copy-Item 'C:\Users\adive\revision-ai\plugin-cep\index.js' 'C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\com.revisionai.cep\index.js' -Force
+```
