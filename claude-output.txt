@@ -1,0 +1,16 @@
+The deploy step requires Windows — this repo is running on Linux CI. You'll need to run the copy manually on your Windows machine:
+
+```powershell
+Copy-Item 'C:\Users\adive\revision-ai\plugin-cep\index.js' 'C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\com.revisionai.cep\index.js' -Force
+```
+
+**What was changed** (`plugin-cep/index.js:536`):
+
+The entire `patchXhr` block is now wrapped in:
+```js
+csInterface.evalScript('app.project.save()', function () {
+  // ... patchXhr build & send ...
+}) // end evalScript app.project.save()
+```
+
+`app.project.save()` runs synchronously in ExtendScript and the callback only fires after it completes, so the `.prproj` is always flushed to disk before the backend reads it.

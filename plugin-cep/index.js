@@ -533,6 +533,7 @@ function pollPendingEdits() {
             return
           }
 
+          csInterface.evalScript('app.project.save()', function () {
           var patchXhr = new XMLHttpRequest()
           patchXhr.open('POST', 'http://localhost:3001/apply-caption-edit')
           patchXhr.setRequestHeader('Content-Type', 'application/json')
@@ -598,6 +599,7 @@ function pollPendingEdits() {
           }
           patchXhr.timeout = 10000
           patchXhr.send(JSON.stringify({ projectPath: projectPath, find: aj.find, replace: aj.replace }))
+          }) // end evalScript app.project.save()
         })
         return
       }
