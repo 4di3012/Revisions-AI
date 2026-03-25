@@ -18,22 +18,25 @@ jobs:
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: claude --dangerously-skip-permissions --print -p "$env:ISSUE_BODY" > claude-output.txt 2>&1; exit 0
         shell: powershell
+        run: |
+          claude --dangerously-skip-permissions --print -p "$env:ISSUE_BODY" > claude-output.txt 2>&1
+          exit 0
       - name: Commit and push changes
+        shell: powershell
         run: |
           $BRANCH = "claude-task/issue-${{ github.event.issue.number }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b $BRANCH
           git add -A -- ':!.github/workflows/'
-          $diff = git diff --cached --quiet; if ($LASTEXITCODE -ne 0) {
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
             git commit -m "claude-task: #${{ github.event.issue.number }}"
             git push origin $BRANCH
           } else {
             Write-Host "No changes to commit"
           }
-        shell: powershell
       - name: Post success comment
         if: success()
         uses: actions/github-script@v7
@@ -66,24 +69,3 @@ jobs:
               issue_number: ${{ github.event.issue.number }},
               labels: ['claude-failed']
             });
-```
-
----
-
-**Terminal:**
-```
-git add .github/workflows/claude-task.yml
-```
-
----
-
-**Terminal:**
-```
-git commit -m "switch to self-hosted runner"
-```
-
----
-
-**Terminal:**
-```
-git push
