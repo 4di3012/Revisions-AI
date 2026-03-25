@@ -527,71 +527,73 @@ function pollPendingEdits() {
         csInterface.evalScript(INFO_SCRIPT, function (infoResult) {
           var infoParts = infoResult ? infoResult.split('|') : []
           var projectPath = infoParts[0] || ''
-          var sequenceName = infoParts[1] || ''
           if (!projectPath || projectPath === 'undefined') {
             markRevisionFailed(editId)
             return
           }
 
+          // Step 1: POST /apply-caption-edit — must return 200 before proceeding
           var patchXhr = new XMLHttpRequest()
           patchXhr.open('POST', 'http://localhost:3001/apply-caption-edit')
           patchXhr.setRequestHeader('Content-Type', 'application/json')
           patchXhr.onload = function () {
             var result
             try { result = JSON.parse(patchXhr.responseText) } catch (e) { result = {} }
-            if (patchXhr.status >= 200 && patchXhr.status < 300 && result.success) {
-              // Inline the status PATCH so we can reload the project only AFTER Supabase confirms.
-              // Calling markRevisionApplied() then setTimeout(reload, 500) races: Render round-trip
-              // is often >500ms, so the reload was killing the panel context before onload fired.
-              appliedIds.push(editId)
-              var statusXhr = new XMLHttpRequest()
-              statusXhr.open('PATCH', API + '/revisions/' + editId + '/status')
-              statusXhr.setRequestHeader('Content-Type', 'application/json')
-              statusXhr.onload = function () {
-                idx++
-                if (idx >= edits.length && !anyFailed) {
-                  pendingRevisionIds = appliedIds.slice()
-                  setStatus('Edits applied — starting export…')
-                  var exportXhr = new XMLHttpRequest()
-                  exportXhr.open('POST', 'http://localhost:3001/export-video')
-                  exportXhr.setRequestHeader('Content-Type', 'application/json')
-                  exportXhr.onload = function () {
-                    var exportResult
-                    try { exportResult = JSON.parse(exportXhr.responseText) } catch (e) { exportResult = {} }
-                    if (exportXhr.status >= 200 && exportXhr.status < 300 && exportResult.success) {
-                      setStatus('Export started — rendering in background…', 'success')
-                    } else {
-                      var msg = 'export-video failed\nstatus: ' + exportXhr.status + '\nresponse: ' + exportXhr.responseText
-                      console.error(msg)
-                      alert(msg)
-                    }
-                  }
-                  exportXhr.onerror = function () {
-                    console.error('export-video XHR error — backend unreachable')
-                    setStatus('Export trigger failed — check backend', 'error')
-                  }
-                  exportXhr.send(JSON.stringify({ projectPath: projectPath }))
-                } else {
-                  executeNext()
-                }
-              }
-              statusXhr.onerror = function () { idx++; executeNext() }
-              statusXhr.send(JSON.stringify({ status: 'applied' }))
-            } else {
+            if (!(patchXhr.status >= 200 && patchXhr.status < 300 && result.success)) {
               var msg = 'apply-caption-edit failed\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
               console.error(msg)
               alert(msg)
               markRevisionFailed(editId)
+              return
             }
+
+            // Step 2: markRevisionApplied — must complete before proceeding
+            appliedIds.push(editId)
+            var markXhr = new XMLHttpRequest()
+            markXhr.open('PATCH', API + '/revisions/' + editId + '/status')
+            markXhr.setRequestHeader('Content-Type', 'application/json')
+            markXhr.onload = function () {
+              idx++
+
+              // Step 3: POST /export-video — only after both Step 1 and Step 2 complete
+              if (idx >= edits.length && !anyFailed) {
+                pendingRevisionIds = appliedIds.slice()
+                setStatus('Edits applied — starting export…')
+                var exportXhr = new XMLHttpRequest()
+                exportXhr.open('POST', 'http://localhost:3001/export-video')
+                exportXhr.setRequestHeader('Content-Type', 'application/json')
+                exportXhr.onload = function () {
+                  var exportResult
+                  try { exportResult = JSON.parse(exportXhr.responseText) } catch (e) { exportResult = {} }
+                  if (exportXhr.status >= 200 && exportXhr.status < 300 && exportResult.success) {
+                    setStatus('Export started — rendering in background…', 'success')
+                  } else {
+                    var msg = 'export-video failed\nstatus: ' + exportXhr.status + '\nresponse: ' + exportXhr.responseText
+                    console.error(msg)
+                    alert(msg)
+                  }
+                }
+                exportXhr.onerror = function () {
+                  console.error('export-video XHR error — backend unreachable')
+                  setStatus('Export trigger failed — check backend', 'error')
+                }
+                exportXhr.send(JSON.stringify({ projectPath: projectPath }))
+              } else {
+                executeNext()
+              }
+            }
+            // If markRevisionApplied fails, block export — do not fall through to executeNext
+            markXhr.onerror = function () { markRevisionFailed(editId) }
+            markXhr.send(JSON.stringify({ status: 'applied' }))
           }
           patchXhr.onerror = function () {
-            var msg = 'apply-caption-edit XHR error — backend unreachable\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
+            var msg = 'apply-caption-edit XHR error — backend unreachable'
             console.error(msg)
             alert(msg)
             markRevisionFailed(editId)
           }
           patchXhr.ontimeout = function () {
-            var msg = 'apply-caption-edit XHR timeout (10s)\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
+            var msg = 'apply-caption-edit XHR timeout (10s)'
             console.error(msg)
             alert(msg)
             markRevisionFailed(editId)
