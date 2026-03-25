@@ -1,3 +1,4 @@
+// Self-hosted runner test - success
 require('dotenv').config({ path: require('path').join(__dirname, '.env') })
 
 const express = require('express')
