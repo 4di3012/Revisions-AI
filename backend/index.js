@@ -535,6 +535,8 @@ app.post('/apply-caption-edit', async (req, res) => {
 
 // POST /export-video — launch AME CLI against a prproj file
 // Accepts { projectPath }; responds immediately and runs AME in background
+// Uses AME ExtendScript API (--console es.processFile) to export a specific
+// sequence by name without triggering any "Choose Items to Import" dialog.
 app.post('/export-video', (req, res) => {
   const { projectPath } = req.body
   if (!projectPath) {
@@ -542,14 +544,46 @@ app.post('/export-video', (req, res) => {
   }
 
   const { exec } = require('child_process')
-  const amePath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe'
-  const presetPath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\MediaIO\\systempresets\\4E49434B_48323634\\Facebook 1080p HD.epr'
-  const encodeCmd = '"' + amePath + '" -project "' + projectPath + '" -preset "' + presetPath + '"'
+  const fs = require('fs')
+  const os = require('os')
+  const path = require('path')
+
+  const amePath      = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe'
+  const presetPath   = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\MediaIO\\systempresets\\4E49434B_48323634\\Facebook 1080p HD.epr'
+  const sequenceName = 'CL_HATO_C28_CUSTOM_1_9x16'
+  const outputFolder = path.dirname(projectPath)
+
+  // Build a temp JSX that calls AME's exportSequence() API with the target sequence.
+  // This is the only supported way to target a named sequence without a dialog.
+  const jsxContent = `
+var exporter = app.getExporter();
+if (exporter) {
+  var result = exporter.exportSequence(
+    ${JSON.stringify(projectPath)},
+    ${JSON.stringify(outputFolder)},
+    ${JSON.stringify(presetPath)},
+    false,
+    false,
+    0,
+    0,
+    ${JSON.stringify(sequenceName)}
+  );
+  $.writeln("exportSequence result: " + result);
+} else {
+  $.writeln("exportSequence error: could not get exporter");
+}
+`
+
+  const jsxPath  = path.join(os.tmpdir(), 'ame_export_' + Date.now() + '.jsx')
+  fs.writeFileSync(jsxPath, jsxContent)
+
+  const encodeCmd = '"' + amePath + '" --console es.processFile "' + jsxPath + '"'
 
   console.log('export-video: running AME:', encodeCmd)
   res.json({ success: true })
 
   exec(encodeCmd, (err, stdout, stderr) => {
+    fs.unlink(jsxPath, () => {})
     if (err) console.error('export-video: AME error:', err.message)
     else console.log('export-video: AME done', stdout, stderr)
   })
