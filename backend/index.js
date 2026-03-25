@@ -546,9 +546,9 @@ app.post('/export-video', (req, res) => {
   const fs = require('fs')
   const path = require('path')
   const amePath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe'
-  // -project queues the prproj in AME; -preset is not a valid CLI flag and causes
-  // AME to attempt importing the .epr as media, resulting in "File Import Failure"
-  const encodeCmd = '"' + amePath + '" -project "' + projectPath + '"'
+  // -project queues the prproj; -start auto-begins encoding without requiring the
+  // user to click the green play button. -preset is not a valid CLI flag.
+  const encodeCmd = '"' + amePath + '" -project "' + projectPath + '" -start'
 
   console.log('export-video: launching AME:', encodeCmd)
   res.json({ success: true })

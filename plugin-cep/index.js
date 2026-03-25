@@ -533,13 +533,14 @@ function pollPendingEdits() {
             return
           }
 
+          csInterface.evalScript('app.project.save()', function () {
           var patchXhr = new XMLHttpRequest()
           patchXhr.open('POST', 'http://localhost:3001/apply-caption-edit')
           patchXhr.setRequestHeader('Content-Type', 'application/json')
           patchXhr.onload = function () {
             var result
             try { result = JSON.parse(patchXhr.responseText) } catch (e) { result = {} }
-            if (patchXhr.status >= 200 && patchXhr.status < 300 && result.success) {
+            if (patchXhr.status >= 200 && patchXhr.status < 300 && result.success === true) {
               // Inline the status PATCH so we can reload the project only AFTER Supabase confirms.
               // Calling markRevisionApplied() then setTimeout(reload, 500) races: Render round-trip
               // is often >500ms, so the reload was killing the panel context before onload fired.
@@ -563,7 +564,6 @@ function pollPendingEdits() {
                     } else {
                       var msg = 'export-video failed\nstatus: ' + exportXhr.status + '\nresponse: ' + exportXhr.responseText
                       console.error(msg)
-                      alert(msg)
                     }
                   }
                   exportXhr.onerror = function () {
@@ -578,26 +578,26 @@ function pollPendingEdits() {
               statusXhr.onerror = function () { idx++; executeNext() }
               statusXhr.send(JSON.stringify({ status: 'applied' }))
             } else {
-              var msg = 'apply-caption-edit failed\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
-              console.error(msg)
-              alert(msg)
+              var errDetail = ''
+              try { errDetail = JSON.parse(patchXhr.responseText).error || patchXhr.responseText } catch (e) { errDetail = patchXhr.responseText }
+              setStatus('Caption patch failed: ' + errDetail, 'error')
+              console.error('apply-caption-edit failed', patchXhr.status, patchXhr.responseText)
               markRevisionFailed(editId)
             }
           }
           patchXhr.onerror = function () {
-            var msg = 'apply-caption-edit XHR error — backend unreachable\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
-            console.error(msg)
-            alert(msg)
+            setStatus('Caption patch error — backend unreachable (localhost:3001)', 'error')
+            console.error('apply-caption-edit XHR error — backend unreachable')
             markRevisionFailed(editId)
           }
           patchXhr.ontimeout = function () {
-            var msg = 'apply-caption-edit XHR timeout (10s)\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
-            console.error(msg)
-            alert(msg)
+            setStatus('Caption patch timed out (10s) — backend may be slow', 'error')
+            console.error('apply-caption-edit XHR timeout (10s)')
             markRevisionFailed(editId)
           }
           patchXhr.timeout = 10000
           patchXhr.send(JSON.stringify({ projectPath: projectPath, find: aj.find, replace: aj.replace }))
+          }) // end app.project.save callback
         })
         return
       }
