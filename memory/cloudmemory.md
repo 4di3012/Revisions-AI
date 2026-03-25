@@ -67,3 +67,12 @@
 \n## Commit: e0e306e — fix: caption_text_change TextDocument — use .toString() and textDoc.text — 2026-03-19 22:47:22 -0500
 \n## Commit: efeab6f — fix: caption_text_change direct evalScript with TextDocument fix — 2026-03-20 00:16:13 -0500
 \n## Commit: 1c555fd — fix: remove dangling quote left by caption_text_change block deletion — 2026-03-20 00:18:11 -0500
+\n## Commit: 007cf4a — debug: add BEFORE/AFTER alerts in caption_text_change ExtendScript to verify td.text read/write — 2026-03-20 00:32:17 -0500
+\n## Commit: 6b0fa87 — fix: caption timeline search, block AME on failure, persistent apply button — 2026-03-20 00:53:28 -0500
+\n## Commit: dd402f3 — fix: caption_text_change — two-step evalScript to avoid string escaping issues — 2026-03-20 00:58:48 -0500
+\n## Commit: 850e896 — docs: add auto plugin deploy rule to CLAUDE.md — 2026-03-20 01:02:43 -0500
+\n## Commit: eb56666 — fix: pending-edits returns all auto revisions with queued/pending/applying status — 2026-03-20 01:17:10 -0500
+\n## Commit: c1a1d7a — fix: apply-edits resets all auto revisions to queued; pending-edits queries queued only — 2026-03-20 01:22:39 -0500
+\n## Commit: 8235450 — fix: apply button states (green/yellow/timeout), backend logging for apply-edits — 2026-03-20 01:28:50 -0500
+\n## Commit: 1bd8079 — add claude code autonomous workflow — 2026-03-25 13:54:04 -0500
+\n## Commit: 596c77f — fix: pass issue body as env var to avoid shell injection in claude-task workflow — 2026-03-25 14:00:29 -0500

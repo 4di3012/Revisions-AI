@@ -253,10 +253,9 @@ function buildExecuteScript(actionJson) {
     '  try {',
     '    var action = JSON.parse("' + jsonStr + '");',
     '    var seq = app.project.activeSequence;',
-    '    if (!seq) { alert("ERROR: no active sequence"); return "ERROR: no active sequence"; }',
+    '    if (!seq) return "ERROR: no active sequence";',
     '',
     '    var TOL = 5.0;',
-    '    var log = [];',
     '',
     '    function tcToSec(tc) {',
     '      if (!tc) return 0;',
@@ -265,26 +264,19 @@ function buildExecuteScript(actionJson) {
     '    }',
     '',
     '    var targetSec = (action.timecode_seconds !== undefined) ? action.timecode_seconds : tcToSec(action.timecode);',
-    '    log.push("=== ACTION: " + action.action + " ===");',
-    '    log.push("Timecode: " + action.timecode + " => " + targetSec.toFixed(3) + "s  tol=" + TOL + "s");',
-    '    log.push("Video tracks: " + seq.videoTracks.numTracks + "  Audio tracks: " + seq.audioTracks.numTracks);',
     '',
-    '    // Collect all clips within tolerance of target timecode — only log matched ones',
+    '    // Collect all clips within tolerance of target timecode',
     '    var matched = [];',
     '    for (var ti=0; ti<seq.videoTracks.numTracks; ti++) {',
     '      var tr = seq.videoTracks[ti];',
     '      for (var ci=0; ci<tr.clips.numItems; ci++) {',
     '        var cl = tr.clips[ci];',
     '        var cs = cl.start.seconds; var ce = cl.end.seconds;',
-    '        var hit = (cs <= targetSec + TOL) && (ce >= targetSec - TOL);',
-    '        if (hit) {',
-    '          log.push("MATCH [V" + (ti+1) + " clip" + ci + "] " + cl.name + "  " + cs.toFixed(2) + "s-" + ce.toFixed(2) + "s");',
-    '          $.writeln("MATCH [V" + (ti+1) + " clip" + ci + "] " + cl.name + " " + cs.toFixed(2) + "-" + ce.toFixed(2) + "s");',
+    '        if ((cs <= targetSec + TOL) && (ce >= targetSec - TOL)) {',
     '          matched.push({ clip: cl, ti: ti });',
     '        }',
     '      }',
     '    }',
-    '    log.push("Clips matching timecode: " + matched.length);',
     '',
     '    var result = "SKIP: no handler";',
     '    var a = action.action;',
@@ -294,24 +286,12 @@ function buildExecuteScript(actionJson) {
     '      var lumetriDone = false;',
     '      for (var mi=0; mi<matched.length && !lumetriDone; mi++) {',
     '        var cl = matched[mi].clip;',
-    '        log.push("Inspecting clip for lumetri: " + cl.name);',
     '        var efx = cl.components;',
-    '        log.push("  Effects/components: " + efx.numItems);',
     '        for (var ei=0; ei<efx.numItems; ei++) {',
     '          var eff = efx[ei];',
-    '          log.push("  [" + ei + "] " + eff.displayName + " matchName=" + (eff.matchName||"?"));',
-    '          $.writeln("  Effect[" + ei + "] " + eff.displayName + " matchName=" + (eff.matchName||"?"));',
     '          var isLumetri = (eff.displayName.toLowerCase().indexOf("lumetri") !== -1) ||',
     '                          (eff.matchName === "ADBE Lumetri Color");',
     '          if (isLumetri) {',
-    '            log.push("  >>> Found Lumetri Color effect");',
-    '            for (var lpi=0; lpi<eff.properties.numItems; lpi++) {',
-    '              var lp = eff.properties[lpi];',
-    '              var lv = ""; try { lv = String(lp.getValue()); } catch(lpe) { lv = "[err]"; }',
-    '              log.push("    LumetriProp[" + lpi + "] " + lp.displayName + " = " + lv);',
-    '              $.writeln("    LumetriProp[" + lpi + "] " + lp.displayName + " = " + lv);',
-    '            }',
-    '            // Try to set by displayName matching property name',
     '            var target = null;',
     '            for (var lpi2=0; lpi2<eff.properties.numItems; lpi2++) {',
     '              var lp2 = eff.properties[lpi2];',
@@ -320,7 +300,6 @@ function buildExecuteScript(actionJson) {
     '              }',
     '            }',
     '            if (!target) {',
-    '              // fallback: map common names',
     '              var nm = { saturation: "Saturation", temperature: "Temperature", tint: "Tint",',
     '                         exposure: "Exposure", contrast: "Contrast", highlights: "Highlights",',
     '                         shadows: "Shadows", whites: "Whites", blacks: "Blacks" };',
@@ -333,10 +312,7 @@ function buildExecuteScript(actionJson) {
     '            }',
     '            if (target) {',
     '              target.setValue(action.value, true);',
-    '              log.push("  >>> SET " + target.displayName + " = " + action.value);',
     '              lumetriDone = true;',
-    '            } else {',
-    '              log.push("  >>> property [" + action.property + "] NOT found in Lumetri");',
     '            }',
     '          }',
     '        }',
@@ -349,21 +325,12 @@ function buildExecuteScript(actionJson) {
     '      var motionDone = false;',
     '      for (var mi=0; mi<matched.length && !motionDone; mi++) {',
     '        var cl = matched[mi].clip;',
-    '        log.push("Inspecting clip for motion: " + cl.name);',
     '        var efx2 = cl.components;',
     '        for (var ei2=0; ei2<efx2.numItems; ei2++) {',
     '          var eff2 = efx2[ei2];',
-    '          log.push("  [" + ei2 + "] " + eff2.displayName + " matchName=" + (eff2.matchName||"?"));',
     '          var isMotion = (eff2.matchName === "ADBE Motion") ||',
     '                         (eff2.displayName.toLowerCase() === "motion");',
     '          if (isMotion) {',
-    '            log.push("  >>> Found Motion effect");',
-    '            for (var mop=0; mop<eff2.properties.numItems; mop++) {',
-    '              var mp2 = eff2.properties[mop];',
-    '              var mv2 = ""; try { mv2 = String(mp2.getValue()); } catch(mpe2) { mv2 = "[err]"; }',
-    '              log.push("    MotionProp[" + mop + "] " + mp2.displayName + " = " + mv2);',
-    '              $.writeln("    MotionProp[" + mop + "] " + mp2.displayName + " = " + mv2);',
-    '            }',
     '            var motTarget = null;',
     '            for (var mop2=0; mop2<eff2.properties.numItems; mop2++) {',
     '              var mp3 = eff2.properties[mop2];',
@@ -383,10 +350,7 @@ function buildExecuteScript(actionJson) {
     '            }',
     '            if (motTarget) {',
     '              motTarget.setValue(action.value, true);',
-    '              log.push("  >>> SET " + motTarget.displayName + " = " + action.value);',
     '              motionDone = true;',
-    '            } else {',
-    '              log.push("  >>> motion property [" + action.property + "] NOT found");',
     '            }',
     '          }',
     '        }',
@@ -399,29 +363,21 @@ function buildExecuteScript(actionJson) {
     '      var swapDone = false;',
     '      for (var mi=0; mi<matched.length && !swapDone; mi++) {',
     '        var cl = matched[mi].clip;',
-    '        log.push("Clip for swap: " + cl.name);',
     '        var pi3 = cl.projectItem;',
     '        if (pi3) {',
-    '          var curPath = ""; try { curPath = pi3.getMediaPath(); } catch(gmp) { curPath = "[err:" + gmp.message + "]"; }',
-    '          log.push("  Current media path: " + curPath);',
-    '          $.writeln("  clip_swap current path: " + curPath);',
     '          try {',
     '            pi3.changeMediaPath(action.new_file_path, true);',
-    '            log.push("  >>> changeMediaPath to: " + action.new_file_path);',
     '            swapDone = true;',
     '          } catch(cmp) {',
-    '            log.push("  changeMediaPath error: " + cmp.message);',
-    '            // fallback: import + replaceWithSequence',
     '            try {',
     '              var imported = app.project.importFiles([action.new_file_path], true, app.project.rootItem, false);',
     '              if (imported && imported.numItems > 0) {',
     '                cl.replaceWithSequence(imported[0], false);',
-    '                log.push("  >>> replaceWithSequence fallback OK");',
     '                swapDone = true;',
-    '              } else { log.push("  import returned no items"); }',
-    '            } catch(rwse) { log.push("  replaceWithSequence error: " + rwse.message); }',
+    '              }',
+    '            } catch(rwse) {}',
     '          }',
-    '        } else { log.push("  no projectItem on clip"); }',
+    '        }',
     '      }',
     '      result = swapDone ? "OK" : "ERROR: clip_swap failed";',
     '    }',
@@ -429,25 +385,20 @@ function buildExecuteScript(actionJson) {
     '    // ── add_overlay ──────────────────────────────────────────────────',
     '    if (a === "add_overlay") {',
     '      try {',
-    '        log.push("add_overlay file: " + action.file_path);',
     '        var imported2 = app.project.importFiles([action.file_path], true, app.project.rootItem, false);',
     '        if (!imported2 || imported2.numItems === 0) {',
     '          result = "ERROR: import failed for " + action.file_path;',
     '        } else {',
-    '          log.push("  imported item: " + imported2[0].name);',
-    '          // Find first empty track above V1, or use highest track',
     '          var overlayTi = seq.videoTracks.numTracks - 1;',
     '          for (var oti=1; oti<seq.videoTracks.numTracks; oti++) {',
     '            if (seq.videoTracks[oti].clips.numItems === 0) { overlayTi = oti; break; }',
     '          }',
-    '          log.push("  inserting on track V" + (overlayTi+1) + " at " + targetSec + "s");',
     '          var insertTime = new Time();',
     '          insertTime.seconds = targetSec;',
     '          seq.videoTracks[overlayTi].insertClip(imported2[0], insertTime);',
-    '          log.push("  >>> overlay inserted");',
     '          result = "OK";',
     '        }',
-    '      } catch(aoe) { result = "ERROR: add_overlay: " + aoe.message; log.push(result); }',
+    '      } catch(aoe) { result = "ERROR: add_overlay: " + aoe.message; }',
     '    }',
     '',
     '    // ── cut_section ──────────────────────────────────────────────────',
@@ -455,13 +406,10 @@ function buildExecuteScript(actionJson) {
     '      try {',
     '        var cutStart = tcToSec(action.timecode_start);',
     '        var cutEnd   = tcToSec(action.timecode_end);',
-    '        log.push("cut_section: " + cutStart.toFixed(2) + "s to " + cutEnd.toFixed(2) + "s");',
-    '        // razor via qe API',
     '        var qeSeq = qe.project.getActiveSequence();',
     '        var TICKS = 254016000000;',
     '        qeSeq.razor(cutStart * TICKS);',
     '        qeSeq.razor(cutEnd * TICKS);',
-    '        log.push("  razored at start and end");',
     '        var removed = 0;',
     '        for (var t2=0; t2<seq.videoTracks.numTracks; t2++) {',
     '          var tr2 = seq.videoTracks[t2];',
@@ -473,18 +421,12 @@ function buildExecuteScript(actionJson) {
     '            }',
     '          }',
     '        }',
-    '        log.push("  removed " + removed + " clips");',
     '        result = removed > 0 ? "OK" : "ERROR: no clips removed in range";',
-    '      } catch(cse) { result = "ERROR: cut_section: " + cse.message; log.push(result); }',
+    '      } catch(cse) { result = "ERROR: cut_section: " + cse.message; }',
     '    }',
     '',
-    '    log.push("RESULT: " + result);',
-    '    alert(log.join("\\n"));',
-    '    $.writeln("RESULT: " + result);',
     '    return result;',
     '  } catch(e) {',
-    '    var msg = "EXCEPTION: " + e.message + (e.line ? " line " + e.line : "");',
-    '    alert(msg);',
     '    return "ERROR: " + e.message;',
     '  }',
     '})()',
@@ -505,6 +447,13 @@ function pollPendingEdits() {
 
     var edits = data.edits || []
     if (edits.length === 0) return
+
+    // Normalize action_json — Supabase may return it as a string in some cases
+    for (var n = 0; n < edits.length; n++) {
+      if (typeof edits[n].action_json === 'string') {
+        try { edits[n].action_json = JSON.parse(edits[n].action_json) } catch (e) {}
+      }
+    }
 
     pollActive = true
     setStatus('Applying edits…')
@@ -573,48 +522,82 @@ function pollPendingEdits() {
       if (edit.action_json && edit.action_json.action === 'caption_text_change') {
         var aj = edit.action_json
         var editId = edit.id
-        csInterface.evalScript('$.findText = ' + JSON.stringify(aj.find) + '; $.replaceText = ' + JSON.stringify(aj.replace) + ';', function () {
-          var searchScript = [
-            'var foundWords = [];',
-            'var result = "not found";',
-            'try {',
-            '  var seq = app.project.activeSequence;',
-            '  for (var t = 0; t < seq.videoTracks.numTracks; t++) {',
-            '    var track = seq.videoTracks[t];',
-            '    for (var c = 0; c < track.clips.numItems; c++) {',
-            '      var clip = track.clips[c];',
-            '      for (var i = 0; i < clip.components.numItems; i++) {',
-            '        var comp = clip.components[i];',
-            '        for (var p = 0; p < comp.properties.numItems; p++) {',
-            '          var prop = comp.properties[p];',
-            '          if (prop.displayName === "Source Text") {',
-            '            try {',
-            '              var val = prop.getValue();',
-            '              if (typeof val === "string" && val.trim() !== "") {',
-            '                foundWords.push(val);',
-            '                if (val.toLowerCase() === $.findText.toLowerCase()) {',
-            '                  prop.setValue($.replaceText);',
-            '                  result = "success";',
-            '                }',
-            '              }',
-            '            } catch(e) {}',
-            '          }',
-            '        }',
-            '      }',
-            '    }',
-            '  }',
-            '} catch(err) { result = "error: " + err.toString(); }',
-            'if (result !== "success") { result = "not found — words: " + foundWords.join("|"); }',
-            'result;'
-          ].join('\n')
-          csInterface.evalScript(searchScript, function (result) {
-            alert('ExtendScript result: ' + result)
-            if (result === 'success') {
-              markRevisionApplied(editId)
+        setStatus('Patching caption in prproj…')
+
+        csInterface.evalScript(INFO_SCRIPT, function (infoResult) {
+          var infoParts = infoResult ? infoResult.split('|') : []
+          var projectPath = infoParts[0] || ''
+          var sequenceName = infoParts[1] || ''
+          if (!projectPath || projectPath === 'undefined') {
+            markRevisionFailed(editId)
+            return
+          }
+
+          var patchXhr = new XMLHttpRequest()
+          patchXhr.open('POST', 'http://localhost:3001/apply-caption-edit')
+          patchXhr.setRequestHeader('Content-Type', 'application/json')
+          patchXhr.onload = function () {
+            var result
+            try { result = JSON.parse(patchXhr.responseText) } catch (e) { result = {} }
+            if (patchXhr.status >= 200 && patchXhr.status < 300 && result.success) {
+              // Inline the status PATCH so we can reload the project only AFTER Supabase confirms.
+              // Calling markRevisionApplied() then setTimeout(reload, 500) races: Render round-trip
+              // is often >500ms, so the reload was killing the panel context before onload fired.
+              appliedIds.push(editId)
+              var statusXhr = new XMLHttpRequest()
+              statusXhr.open('PATCH', API + '/revisions/' + editId + '/status')
+              statusXhr.setRequestHeader('Content-Type', 'application/json')
+              statusXhr.onload = function () {
+                idx++
+                if (idx >= edits.length && !anyFailed) {
+                  pendingRevisionIds = appliedIds.slice()
+                  setStatus('Edits applied — starting export…')
+                  var exportXhr = new XMLHttpRequest()
+                  exportXhr.open('POST', 'http://localhost:3001/export-video')
+                  exportXhr.setRequestHeader('Content-Type', 'application/json')
+                  exportXhr.onload = function () {
+                    var exportResult
+                    try { exportResult = JSON.parse(exportXhr.responseText) } catch (e) { exportResult = {} }
+                    if (exportXhr.status >= 200 && exportXhr.status < 300 && exportResult.success) {
+                      setStatus('Export started — rendering in background…', 'success')
+                    } else {
+                      var msg = 'export-video failed\nstatus: ' + exportXhr.status + '\nresponse: ' + exportXhr.responseText
+                      console.error(msg)
+                      alert(msg)
+                    }
+                  }
+                  exportXhr.onerror = function () {
+                    console.error('export-video XHR error — backend unreachable')
+                    setStatus('Export trigger failed — check backend', 'error')
+                  }
+                  exportXhr.send(JSON.stringify({ projectPath: projectPath }))
+                } else {
+                  executeNext()
+                }
+              }
+              statusXhr.onerror = function () { idx++; executeNext() }
+              statusXhr.send(JSON.stringify({ status: 'applied' }))
             } else {
+              var msg = 'apply-caption-edit failed\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
+              console.error(msg)
+              alert(msg)
               markRevisionFailed(editId)
             }
-          })
+          }
+          patchXhr.onerror = function () {
+            var msg = 'apply-caption-edit XHR error — backend unreachable\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
+            console.error(msg)
+            alert(msg)
+            markRevisionFailed(editId)
+          }
+          patchXhr.ontimeout = function () {
+            var msg = 'apply-caption-edit XHR timeout (10s)\nstatus: ' + patchXhr.status + '\nresponse: ' + patchXhr.responseText
+            console.error(msg)
+            alert(msg)
+            markRevisionFailed(editId)
+          }
+          patchXhr.timeout = 10000
+          patchXhr.send(JSON.stringify({ projectPath: projectPath, find: aj.find, replace: aj.replace }))
         })
         return
       }

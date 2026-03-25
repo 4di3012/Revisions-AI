@@ -126,6 +126,7 @@ export default function ReviewPage() {
   const [error, setError] = useState('')
   const [applyingEdits, setApplyingEdits] = useState(false)
   const [applyMsg, setApplyMsg] = useState('')
+  const [deletingId, setDeletingId] = useState(null)
 
   useEffect(() => {
     axios.get(`${API}/projects/${id}`).then(({ data }) => {
@@ -140,6 +141,18 @@ export default function ReviewPage() {
     setNote('')
     setError('')
     setShowForm(true)
+  }
+
+  async function handleDeleteRevision(revisionId) {
+    setDeletingId(revisionId)
+    try {
+      await axios.delete(`${API}/revisions/${revisionId}`)
+      setRevisions(prev => prev.filter(r => r.id !== revisionId))
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete revision.')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   async function handleSubmitNote(e) {
@@ -295,6 +308,24 @@ export default function ReviewPage() {
                 <span className={`revision-badge revision-badge-${r.category ?? 'pending'}`}>
                   {r.category === 'auto' ? 'Auto' : r.category === 'human' ? 'Needs Editor' : 'Unclassified'}
                 </span>
+                <button
+                  onClick={() => handleDeleteRevision(r.id)}
+                  disabled={deletingId === r.id}
+                  style={{
+                    marginLeft: 'auto',
+                    background: 'none',
+                    border: 'none',
+                    color: deletingId === r.id ? 'var(--text-muted)' : '#f87171',
+                    cursor: deletingId === r.id ? 'default' : 'pointer',
+                    fontSize: 16,
+                    lineHeight: 1,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                  }}
+                  title="Delete revision"
+                >
+                  {deletingId === r.id ? '…' : '×'}
+                </button>
               </div>
             ))
           )}

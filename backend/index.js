@@ -405,6 +405,14 @@ app.patch('/revisions/:id/status', async (req, res) => {
   res.json(data)
 })
 
+// DELETE /revisions/:id — remove a revision
+app.delete('/revisions/:id', async (req, res) => {
+  const { id } = req.params
+  const { error } = await supabase.from('revisions').delete().eq('id', id)
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ ok: true })
+})
+
 // POST /admin/migrate-versions — run once to add versions column to projects
 app.post('/admin/migrate-versions', async (req, res) => {
   const { Client } = require('pg')
@@ -436,6 +444,115 @@ app.post('/admin/migrate', async (req, res) => {
   } finally {
     await client.end()
   }
+})
+
+// POST /apply-caption-edit — patch caption text directly in a .prproj file
+app.post('/apply-caption-edit', async (req, res) => {
+  const { projectPath, find, replace } = req.body
+  if (!projectPath || !find || replace === undefined) {
+    return res.status(400).json({ error: 'projectPath, find, and replace are required' })
+  }
+
+  const zlib = require('zlib')
+  const fs = require('fs')
+
+  try {
+    const raw = fs.readFileSync(projectPath)
+
+    await new Promise((resolve, reject) => {
+      zlib.gunzip(raw, (err, decompressed) => {
+        if (err) { reject(err); return }
+        let xml = decompressed.toString('utf8')
+
+        const findBufExact = Buffer.from(find, 'utf8')
+        const findBufWithNull = Buffer.concat([findBufExact, Buffer.alloc(1)])
+        const replaceBuf = Buffer.from(replace, 'utf8')
+        let searchFrom = 0
+        let patched = false
+
+        while (!patched) {
+          const nameIdx = xml.indexOf('<Name>Source Text</Name>', searchFrom)
+          if (nameIdx === -1) break
+
+          const arbStart = xml.lastIndexOf('<ArbVideoComponentParam', nameIdx)
+          const arbEnd = xml.indexOf('</ArbVideoComponentParam>', arbStart)
+          const blobTagIdx = xml.indexOf('<StartKeyframeValue', arbStart)
+          if (blobTagIdx === -1 || blobTagIdx > arbEnd) { searchFrom = nameIdx + 1; continue }
+
+          const blobContentStart = xml.indexOf('>', blobTagIdx) + 1
+          const blobContentEnd = xml.indexOf('</StartKeyframeValue>', blobContentStart)
+          if (blobContentEnd === -1) { searchFrom = nameIdx + 1; continue }
+
+          const blob = xml.substring(blobContentStart, blobContentEnd).trim()
+          const decoded = Buffer.from(blob, 'base64')
+
+          // Search buffer directly — toString('utf8') on binary data corrupts byte offsets
+          // Try with trailing null byte first (zero-padding left by previous patches)
+          let textOffset = decoded.indexOf(findBufWithNull)
+          if (textOffset === -1) textOffset = decoded.indexOf(findBufExact)
+          if (textOffset === -1) { searchFrom = nameIdx + 1; continue }
+
+          // Read the actual allocated length from the 4-byte LE field immediately before the text
+          const fullTextLen = decoded.readUInt32LE(textOffset - 4)
+          if (replaceBuf.length > fullTextLen) {
+            reject(new Error(`Replacement "${replace}" (${replaceBuf.length}B) exceeds original space (${fullTextLen}B)`)); return
+          }
+          decoded.fill(0, textOffset, textOffset + fullTextLen)
+          replaceBuf.copy(decoded, textOffset)
+          decoded.writeUInt32LE(replaceBuf.length, textOffset - 4)
+
+          // Splice patched blob back into XML
+          const newBlob = decoded.toString('base64')
+          xml = xml.substring(0, blobContentStart) + '\n\t\t' + newBlob + '\n\t\t' + xml.substring(blobContentEnd)
+
+          // Update InstanceName label
+          const instanceBefore = '<InstanceName>' + find + '</InstanceName>'
+          const instanceAfter  = '<InstanceName>' + replace + '</InstanceName>'
+          if (xml.includes(instanceBefore)) xml = xml.replace(instanceBefore, instanceAfter)
+
+          patched = true
+        }
+
+        if (!patched) { reject(new Error(`Text "${find}" not found in any Source Text blob`)); return }
+
+        fs.copyFileSync(projectPath, projectPath + '.backup')
+
+        zlib.gzip(Buffer.from(xml, 'utf8'), (err2, compressed) => {
+          if (err2) { reject(err2); return }
+          fs.writeFileSync(projectPath, compressed)
+          resolve()
+        })
+      })
+    })
+
+    console.log(`apply-caption-edit: "${find}" → "${replace}" in ${projectPath}`)
+    res.json({ success: true })
+  } catch (err) {
+    console.error('apply-caption-edit error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /export-video — launch AME CLI against a prproj file
+// Accepts { projectPath }; responds immediately and runs AME in background
+app.post('/export-video', (req, res) => {
+  const { projectPath } = req.body
+  if (!projectPath) {
+    return res.status(400).json({ error: 'projectPath is required' })
+  }
+
+  const { exec } = require('child_process')
+  const amePath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\Adobe Media Encoder.exe'
+  const presetPath = 'C:\\Program Files\\Adobe\\Adobe Media Encoder 2026\\MediaIO\\systempresets\\4E49434B_48323634\\Facebook 1080p HD.epr'
+  const encodeCmd = '"' + amePath + '" -project "' + projectPath + '" -preset "' + presetPath + '"'
+
+  console.log('export-video: running AME:', encodeCmd)
+  res.json({ success: true })
+
+  exec(encodeCmd, (err, stdout, stderr) => {
+    if (err) console.error('export-video: AME error:', err.message)
+    else console.log('export-video: AME done', stdout, stderr)
+  })
 })
 
 app.get('/health', (req, res) => {
