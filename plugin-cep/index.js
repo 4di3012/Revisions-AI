@@ -558,7 +558,7 @@ function pollPendingEdits() {
                   exportXhr.onload = function () {
                     var exportResult
                     try { exportResult = JSON.parse(exportXhr.responseText) } catch (e) { exportResult = {} }
-                    if (exportXhr.status >= 200 && exportXhr.status < 300 && exportResult.success) {
+                    if ((exportXhr.status === 0 || (exportXhr.status >= 200 && exportXhr.status < 300)) && exportResult.success) {
                       setStatus('Export started — rendering in background…', 'success')
                     } else {
                       var msg = 'export-video failed\nstatus: ' + exportXhr.status + '\nresponse: ' + exportXhr.responseText
