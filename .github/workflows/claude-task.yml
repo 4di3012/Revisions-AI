@@ -5,7 +5,7 @@ on:
 jobs:
   run-claude-task:
     if: github.event.label.name == 'claude-task'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: write
       issues: write
@@ -13,33 +13,27 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
       - name: Run Claude task
         id: claude
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          claude --dangerously-skip-permissions --print -p "$ISSUE_BODY" > claude-output.txt 2>&1 || true
+        run: claude --dangerously-skip-permissions --print -p "$env:ISSUE_BODY" > claude-output.txt 2>&1; exit 0
+        shell: powershell
       - name: Commit and push changes
-        id: commit
         run: |
-          BRANCH="claude-task/issue-${{ github.event.issue.number }}"
+          $BRANCH = "claude-task/issue-${{ github.event.issue.number }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
+          git checkout -b $BRANCH
           git add -A -- ':!.github/workflows/'
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
+          $diff = git diff --cached --quiet; if ($LASTEXITCODE -ne 0) {
             git commit -m "claude-task: #${{ github.event.issue.number }}"
-            git push origin "$BRANCH"
-          fi
+            git push origin $BRANCH
+          } else {
+            Write-Host "No changes to commit"
+          }
+        shell: powershell
       - name: Post success comment
         if: success()
         uses: actions/github-script@v7
@@ -72,3 +66,24 @@ jobs:
               issue_number: ${{ github.event.issue.number }},
               labels: ['claude-failed']
             });
+```
+
+---
+
+**Terminal:**
+```
+git add .github/workflows/claude-task.yml
+```
+
+---
+
+**Terminal:**
+```
+git commit -m "switch to self-hosted runner"
+```
+
+---
+
+**Terminal:**
+```
+git push
